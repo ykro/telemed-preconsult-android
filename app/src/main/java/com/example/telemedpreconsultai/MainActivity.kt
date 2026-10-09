@@ -51,6 +51,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
@@ -299,6 +302,11 @@ fun PreConsultaScreen() {
                                         val qs = GemmaLocalEngine.generateFollowUpQuestions(transcript)
                                         followUpQuestions = qs
                                         followUpAnswers.clear()
+                                        qs.forEach { q ->
+                                            q.quickOptions.firstOrNull()?.let { firstOpt ->
+                                                followUpAnswers[q.id] = firstOpt
+                                            }
+                                        }
                                         isLoadingFollowUps = false
                                         step = 2
                                     }
@@ -328,7 +336,7 @@ fun PreConsultaScreen() {
                 }
             }
 
-            // STEP 2: 3 PREGUNTAS RÁPIDAS
+            // STEP 2: AYÚDAME CON MÁS INFORMACIÓN
             if (step == 2) {
                 Surface(
                     shape = RoundedCornerShape(20.dp),
@@ -338,14 +346,14 @@ fun PreConsultaScreen() {
                 ) {
                     Column(modifier = Modifier.padding(24.dp)) {
                         Text(
-                            text = "Tres preguntas rápidas",
+                            text = "Ayúdame con más información",
                             fontSize = 19.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = Color(0xFF0F172A)
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Selecciona una respuesta breve para completar tu pre-consulta.",
+                            text = "Responde estas breves preguntas para afinar tu resumen antes de enviarlo al médico.",
                             fontSize = 13.sp,
                             color = Color(0xFF64748B)
                         )
@@ -445,7 +453,9 @@ fun PreConsultaScreen() {
                                         step = 3
                                     }
                                 },
-                                enabled = !isLoadingSummary,
+                                enabled = !isLoadingSummary &&
+                                    followUpQuestions.isNotEmpty() &&
+                                    followUpQuestions.all { !followUpAnswers[it.id].isNullOrBlank() },
                                 shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = Color(0xFF0284C7),
@@ -471,6 +481,73 @@ fun PreConsultaScreen() {
             if (step == 3 && patientDeliverable != null && doctorDeliverable != null) {
                 val pat = patientDeliverable!!
                 val doc = doctorDeliverable!!
+
+                // High-Prominence Hero Priority Clinical Callout Banner (Above Tabs, Visible on Both Views)
+                if (pat.urgencyNotice.isNotBlank()) {
+                    val isUrgent = doc.triageLevel == "ROJO"
+                    val isRoutine = doc.triageLevel == "VERDE"
+                    val bgColor = when {
+                        isUrgent -> Color(0xFFFEF2F2)
+                        isRoutine -> Color(0xFFECFDF5)
+                        else -> Color(0xFFFFFBEB)
+                    }
+                    val borderColor = when {
+                        isUrgent -> Color(0xFFEF4444)
+                        isRoutine -> Color(0xFF10B981)
+                        else -> Color(0xFFF59E0B)
+                    }
+                    val textColor = when {
+                        isUrgent -> Color(0xFF991B1B)
+                        isRoutine -> Color(0xFF065F46)
+                        else -> Color(0xFF92400E)
+                    }
+                    val badgeText = when {
+                        isUrgent -> "NIVEL DE PRIORIDAD CLÍNICA · ATENCIÓN URGENTE INMEDIATA"
+                        isRoutine -> "NIVEL DE PRIORIDAD CLÍNICA · CONSULTA RUTINARIA"
+                        else -> "NIVEL DE PRIORIDAD CLÍNICA · CONSULTA PRIORITARIA HOY"
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = bgColor,
+                        border = BorderStroke(1.dp, borderColor),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .drawBehind {
+                                drawRect(
+                                    color = borderColor,
+                                    topLeft = Offset.Zero,
+                                    size = Size(width = 6.dp.toPx(), height = size.height)
+                                )
+                            }
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(start = 22.dp, top = 18.dp, end = 18.dp, bottom = 18.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = borderColor
+                            ) {
+                                Text(
+                                    text = badgeText,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                            Text(
+                                text = pat.urgencyNotice,
+                                fontSize = 17.sp,
+                                lineHeight = 23.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = textColor
+                            )
+                        }
+                    }
+                }
 
                 // Segmented Selector
                 Row(
@@ -512,25 +589,6 @@ fun PreConsultaScreen() {
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color(0xFF0F172A)
                             )
-
-                            if (pat.urgencyNotice.isNotBlank()) {
-                                Surface(
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = if (doc.triageLevel == "ROJO") Color(0xFFFFF1F2) else Color(0xFFF0F9FF),
-                                    border = BorderStroke(
-                                        1.dp,
-                                        if (doc.triageLevel == "ROJO") Color(0xFFFECDD3) else Color(0xFFBAE6FD)
-                                    ),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text(
-                                        text = pat.urgencyNotice,
-                                        fontSize = 12.sp,
-                                        color = if (doc.triageLevel == "ROJO") Color(0xFF9F1239) else Color(0xFF075985),
-                                        modifier = Modifier.padding(12.dp)
-                                    )
-                                }
-                            }
 
                             SectionBlock(
                                 label = "1. LO QUE REPORTASTE",

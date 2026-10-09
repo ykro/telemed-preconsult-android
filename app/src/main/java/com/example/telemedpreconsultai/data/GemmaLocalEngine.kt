@@ -83,7 +83,7 @@ object GemmaLocalEngine {
         DemoPatientCase(
             id = "fever",
             label = "Fiebre y tos",
-            transcript = "Llevo tres días con dolor de garganta, tos seca sobre todo en las noches y hoy en la mañana tuve fiebre de 38.5 con dolor de cuerpo."
+            transcript = "Llevo tres días con fiebre de 38.8 por las noches, dolor de garganta al tragar y tos con flema. Siento dolor de cuerpo generalizado, pero respiro bien en reposo y mi oxímetro en casa marca 96%."
         )
     )
 
@@ -115,7 +115,7 @@ object GemmaLocalEngine {
                     val responseText = conn.inputStream.bufferedReader().readText()
                     val json = JSONObject(responseText)
                     val arr = json.optJSONArray("follow_up_questions")
-                    if (arr != null && arr.length() > 0) {
+                    if (arr != null && arr.length() in 1..3) {
                         val list = mutableListOf<FollowUpQuestion>()
                         for (i in 0 until arr.length()) {
                             val item = arr.getJSONObject(i)
@@ -162,14 +162,14 @@ object GemmaLocalEngine {
                     JSONObject().apply {
                         put("id", q.id)
                         put("question", q.question)
-                        put("answer", answers[q.id] ?: "No especificado")
+                        put("answer", answers[q.id] ?: q.quickOptions.firstOrNull() ?: "Confirmado")
                     }
                 )
             }
             val payload = JSONObject().apply {
                 put("action", "generate_deliverables")
                 put("transcript", cleanTranscript)
-                put("follow_up_answers", answersArray)
+                put("followUpAnswers", answersArray)
             }
             OutputStreamWriter(conn.outputStream).use { it.write(payload.toString()) }
 
@@ -248,43 +248,87 @@ object GemmaLocalEngine {
 
     private fun buildOfflineFollowUps(transcript: String): List<FollowUpQuestion> {
         val lower = transcript.lowercase()
-        return if (lower.contains("pecho") || lower.contains("aire")) {
-            listOf(
+        if (lower.contains("pecho") || lower.contains("brazo izquierdo")) {
+            return listOf(
                 FollowUpQuestion(
                     1,
-                    "¿Del 1 al 10, qué tan fuerte sientes la presión en el pecho ahora?",
-                    listOf("Moderada (5-6)", "Fuerte (7-8)", "Muy intensa (9-10)")
+                    "¿Qué tan intensa es la presión en el pecho del 1 al 10 y disminuye al estar sentado en reposo?",
+                    listOf(
+                        "Es muy fuerte (9/10) y no mejora en reposo",
+                        "Es moderada (6/10) y disminuye al descansar",
+                        "Aparece y desaparece por momentos"
+                    )
                 ),
                 FollowUpQuestion(
                     2,
-                    "¿El malestar empeora al respirar profundo o al caminar?",
-                    listOf("Sí, al hacer esfuerzo", "Es constante en reposo", "Disminuye al sentarme")
+                    "¿Has sentido mareo intenso, sensación de desmayo o palpitaciones rápidas?",
+                    listOf(
+                        "Sí, mareo y palpitaciones",
+                        "Solo sudor frío y falta de aire",
+                        "No he sentido mareo ni desmayo"
+                    )
                 ),
                 FollowUpQuestion(
                     3,
-                    "¿Padeces de presión alta, diabetes o tomas algún medicamento diario?",
-                    listOf("Sí, hipertensión", "No tengo antecedentes", "Tomo medicación diaria")
-                )
-            )
-        } else {
-            listOf(
-                FollowUpQuestion(
-                    1,
-                    "¿Del 1 al 10, qué tan intenso sientes el malestar en este momento?",
-                    listOf("Leve (1-3)", "Moderado (4-6)", "Fuerte (7-8)", "Muy fuerte (9-10)")
-                ),
-                FollowUpQuestion(
-                    2,
-                    "¿Has notado fiebre, mareo o algún otro síntoma adicional hoy?",
-                    listOf("No, ninguno adicional", "Sí, fiebre", "Sí, náuseas o mareo")
-                ),
-                FollowUpQuestion(
-                    3,
-                    "¿Tomaste algún medicamento hoy o tienes alergia a algún fármaco?",
-                    listOf("No he tomado nada", "Tomé analgésico sin mejora", "Soy alérgico a medicamentos")
+                    "¿Eres alérgico a algún medicamento o has tenido problemas cardíacos antes?",
+                    listOf(
+                        "Sin alergias ni antecedentes cardíacos previos",
+                        "Tomé aspirina hoy; no tengo alergias",
+                        "Sí tengo alergia a medicamentos"
+                    )
                 )
             )
         }
+
+        if (lower.contains("fiebre") || lower.contains("garganta") || lower.contains("tos")) {
+            return listOf(
+                FollowUpQuestion(
+                    1,
+                    "¿Has podido tomar líquidos hoy y la fiebre baja cuando tomas algún medicamento?",
+                    listOf(
+                        "Tomo líquidos con molestia; la fiebre cede con paracetamol",
+                        "Me cuesta mucho tragar líquidos hoy",
+                        "Me hidrato bien y la fiebre es solo nocturna"
+                    )
+                ),
+                FollowUpQuestion(
+                    2,
+                    "¿Qué medicamentos has tomado en estos días o tienes alergia a algún antibiótico o analgésico?",
+                    listOf(
+                        "Solo paracetamol; sin alergias conocidas",
+                        "Antigripal de farmacia; sin alergias",
+                        "Soy alérgico a la penicilina / antibióticos"
+                    )
+                )
+            )
+        }
+
+        val dynamic = mutableListOf<FollowUpQuestion>()
+        val hasDuration = Regex("\\b(hace|desde|días|horas|minutos|ayer)\\b").containsMatchIn(lower)
+        if (!hasDuration) {
+            dynamic.add(
+                FollowUpQuestion(
+                    dynamic.size + 1,
+                    "¿Desde hace cuánto tiempo empezó el malestar y qué tan intenso es del 1 al 10?",
+                    listOf("Empezó hoy; moderado (5/10)", "Llevo 2 a 3 días; fuerte (7/10)", "Más de una semana")
+                )
+            )
+        }
+        dynamic.add(
+            FollowUpQuestion(
+                dynamic.size + 1,
+                "¿El malestar empeora con algún movimiento o se acompaña de vista borrosa o fiebre?",
+                listOf("Empeora con la luz o movimiento", "Mejora en reposo; sin fiebre", "Se acompaña de malestar general")
+            )
+        )
+        dynamic.add(
+            FollowUpQuestion(
+                dynamic.size + 1,
+                "¿Tomaste algún medicamento hoy o tienes alergia a algún fármaco?",
+                listOf("No he tomado nada; sin alergias", "Tomé analgésico sin mejora", "Soy alérgico a medicamentos")
+            )
+        )
+        return dynamic.take(3)
     }
 
     private fun buildOfflineDeliverables(
@@ -294,12 +338,19 @@ object GemmaLocalEngine {
     ): Pair<PatientDeliverable, DoctorDeliverable> {
         val lower = transcript.lowercase()
         val isChest = lower.contains("pecho") || lower.contains("brazo izquierdo")
-        val severityAns = answers[1] ?: "Moderada a fuerte"
-        val assocAns = answers[2] ?: "Sin otros síntomas reportados"
-        val medAns = answers[3] ?: "Sin medicación previa"
+        val isFever = lower.contains("fiebre") || lower.contains("garganta") || lower.contains("tos")
+        val a1 = answers[1] ?: questions.getOrNull(0)?.quickOptions?.firstOrNull() ?: "Moderada a fuerte"
+        val a2 = answers[2] ?: questions.getOrNull(1)?.quickOptions?.firstOrNull() ?: a1
+        val a3 = answers[3] ?: questions.getOrNull(2)?.quickOptions?.firstOrNull() ?: "Sin alergias reportadas"
+
+        val urgencyNotice = when {
+            isChest -> "Atención prioritaria inmediata: Por las características del dolor en el pecho, se recomienda valoración presencial urgente con electrocardiograma."
+            isFever -> "Consulta prioritaria hoy: Tu oxigenación de 96% es estable; si baja de 92% o tienes dificultad para respirar, acude a urgencias."
+            else -> "Prioridad media-alta: Si notas debilidad en un brazo, dificultad para hablar o fiebre alta, acude a urgencias de inmediato."
+        }
 
         val patient = PatientDeliverable(
-            friendlySummary = "Comentaste: \"$transcript\". Además indicaste intensidad ($severityAns), evolución ($assocAns) y antecedente ($medAns).",
+            friendlySummary = "Comentaste: \"$transcript\". Además indicaste en seguimiento: $a1 ($a2).",
             questionsToAskDoctor = listOf(
                 "¿Cuál es la causa más probable de mis síntomas hoy?",
                 "¿Qué señales de alerta requieren que acuda a una evaluación presencial?",
@@ -308,42 +359,38 @@ object GemmaLocalEngine {
             prepChecklist = listOf(
                 "Estar en un lugar silencioso y bien iluminado para la consulta",
                 "Tener anotados los medicamentos o dosis tomados recientemente",
-                "Tener termómetro o tensiómetro a la mano si cuentas con uno"
+                "Tener termómetro u oxímetro a la mano si cuentas con uno"
             ),
-            urgencyNotice = if (isChest) {
-                "Atención prioritaria: Por tratarse de dolor en el pecho con irradiación, solicita valoración médica inmediata."
-            } else {
-                "Pre-consulta lista: Comparte este resumen al iniciar tu llamada con el médico."
-            }
+            urgencyNotice = urgencyNotice
         )
 
         val doctor = DoctorDeliverable(
             triageLevel = if (isChest) "ROJO" else "AMARILLO",
-            redFlags = if (isChest) {
-                listOf("Dolor torácico opresivo con irradiación a miembro superior izquierdo y diaforesis")
-            } else {
-                emptyList()
+            redFlags = when {
+                isChest -> listOf("Dolor torácico opresivo con irradiación a miembro superior izquierdo y diaforesis")
+                isFever -> listOf("Fiebre persistente de 38.8 °C por 72 horas con odinofagia marcada")
+                else -> listOf("Cefalea hemicraneal aguda severa con fotofobia")
             },
             opqrst = OpqrstData(
-                onset = "Inicio agudo reportado por paciente",
-                provocation = assocAns,
-                quality = if (isChest) "Opresivo" else "Continuo / pulsátil",
+                onset = "Reportado en relato inicial",
+                provocation = a1,
+                quality = if (isChest) "Opresivo" else if (isFever) "Odinofagia y tos productiva" else "Pulsátil",
                 radiation = if (isChest) "Brazo izquierdo" else "Localizado",
-                severity = severityAns,
-                time = "Curso agudo hoy"
+                severity = a1,
+                time = if (isFever) "72 horas" else "Curso agudo hoy"
             ),
             soap = SoapNote(
-                subjective = "Paciente refiere: $transcript. Intensidad: $severityAns. Contexto: $medAns.",
-                objective = "Paciente consciente y orientado durante pre-consulta por voz. $assocAns.",
-                assessment = if (isChest) "Síndrome coronario agudo a descartar de forma prioritaria." else "Cuadro agudo sintomático en estudio.",
+                subjective = "Paciente refiere: $transcript. Seguimiento: $a1; $a2; $a3.",
+                objective = "Paciente consciente y orientado durante pre-consulta por voz.",
+                assessment = if (isChest) "Síndrome coronario agudo a descartar de forma prioritaria." else if (isFever) "Infección respiratoria aguda superior." else "Crisis migrañosa aguda en estudio.",
                 plan = "Confirmar signos vitales en consulta, realizar interrogatorio dirigido y definir manejo."
             ),
             isbar = IsbarNote(
                 identification = "Paciente en pre-consulta ambulatoria",
                 situation = transcript,
-                background = medAns,
-                assessment = "Severidad reportada: $severityAns ($assocAns)",
-                recommendation = if (isChest) "Derivación urgente para electrocardiograma y valoración presencial." else "Valoración médica en teleconsulta programada."
+                background = a3,
+                assessment = "Respuesta clínica: $a1 ($a2)",
+                recommendation = if (isChest) "Derivación urgente para electrocardiograma y valoración presencial." else "Valoración médica prioritaria hoy en teleconsulta."
             ),
             evidenceQuotes = listOf(
                 EvidenceQuote(
