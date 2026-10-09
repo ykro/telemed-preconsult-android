@@ -1,5 +1,8 @@
 package com.example.telemedpreconsultai
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.speech.RecognizerIntent
@@ -22,9 +25,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -33,7 +38,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -59,6 +63,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.telemedpreconsultai.data.DoctorDeliverable
@@ -66,6 +71,7 @@ import com.example.telemedpreconsultai.data.FollowUpQuestion
 import com.example.telemedpreconsultai.data.GemmaLocalEngine
 import com.example.telemedpreconsultai.data.PatientDeliverable
 import com.example.telemedpreconsultai.theme.TelemedPreconsultAITheme
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Locale
 
@@ -94,6 +100,12 @@ fun PreConsultaScreen() {
 
     var step by remember { mutableStateOf(1) }
     var transcript by remember { mutableStateOf("") }
+    var showVitals by remember { mutableStateOf(false) }
+    var temperatureC by remember { mutableStateOf("") }
+    var spo2Percent by remember { mutableStateOf("") }
+    var heartRateBpm by remember { mutableStateOf("") }
+    var bloodPressure by remember { mutableStateOf("") }
+
     var isLoadingFollowUps by remember { mutableStateOf(false) }
     var followUpQuestions by remember { mutableStateOf<List<FollowUpQuestion>>(emptyList()) }
     val followUpAnswers = remember { mutableStateMapOf<Int, String>() }
@@ -103,6 +115,8 @@ fun PreConsultaScreen() {
     var doctorDeliverable by remember { mutableStateOf<DoctorDeliverable?>(null) }
     var activeResultTab by remember { mutableStateOf("PATIENT") }
     var clinicalFramework by remember { mutableStateOf("SOAP") }
+    val checkedPrep = remember { mutableStateMapOf<Int, Boolean>() }
+    var copiedNote by remember { mutableStateOf(false) }
 
     var tts by remember { mutableStateOf<TextToSpeech?>(null) }
     DisposableEffect(Unit) {
@@ -140,22 +154,33 @@ fun PreConsultaScreen() {
         try {
             speechLauncher.launch(intent)
         } catch (_: Exception) {
-            // If emulator has no voice recognizer installed, populate a realistic sample
             if (transcript.isBlank()) {
                 transcript = GemmaLocalEngine.demoCases[0].transcript
             }
         }
     }
 
+    val buildEnrichedTranscript = {
+        val vitalsParts = mutableListOf<String>()
+        if (temperatureC.isNotBlank()) vitalsParts.add("Temperatura ${temperatureC}C")
+        if (spo2Percent.isNotBlank()) vitalsParts.add("Oxigenación SpO2 ${spo2Percent}%")
+        if (heartRateBpm.isNotBlank()) vitalsParts.add("Pulso ${heartRateBpm} lpm")
+        if (bloodPressure.isNotBlank()) vitalsParts.add("Presión arterial $bloodPressure")
+        if (vitalsParts.isEmpty()) transcript.trim()
+        else "${transcript.trim()} (Signos vitales medidos en casa: ${vitalsParts.joinToString(", ")})"
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .statusBarsPadding()
+            .navigationBarsPadding()
     ) {
-        // Minimal Clean Header
+        // Editorial Minimalist Light Header
         Surface(
             color = Color.White,
-            shadowElevation = 1.dp,
+            shadowElevation = 0.dp,
+            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
             modifier = Modifier.fillMaxWidth()
         ) {
             Row(
@@ -165,17 +190,24 @@ fun PreConsultaScreen() {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "PreConsulta",
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color(0xFF0F172A)
-                )
+                Column {
+                    Text(
+                        text = "PreConsulta",
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF0F172A)
+                    )
+                    Text(
+                        text = "Preparación médica asistida",
+                        fontSize = 11.sp,
+                        color = Color(0xFF64748B)
+                    )
+                }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    StepIndicatorLabel(1, "Síntomas", step == 1)
-                    StepIndicatorLabel(2, "Preguntas", step == 2)
-                    StepIndicatorLabel(3, "Resumen", step == 3)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    StepIndicatorPill(1, "Síntomas", step == 1, step > 1)
+                    StepIndicatorPill(2, "Detalles", step == 2, step > 2)
+                    StepIndicatorPill(3, "Resumen", step == 3, false)
                 }
             }
         }
@@ -184,76 +216,88 @@ fun PreConsultaScreen() {
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 24.dp),
+                .padding(horizontal = 18.dp, vertical = 20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // STEP 1: SÍNTOMAS
+            // STEP 1: SÍNTOMAS Y SIGNOS VITALES OPCIONALES
             if (step == 1) {
                 Surface(
-                    shape = RoundedCornerShape(20.dp),
+                    shape = RoundedCornerShape(18.dp),
                     color = Color.White,
                     border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
-                        modifier = Modifier.padding(24.dp),
+                        modifier = Modifier.padding(22.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
                             text = "Cuéntanos cómo te sientes",
-                            fontSize = 20.sp,
+                            fontSize = 21.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = Color(0xFF0F172A),
                             textAlign = TextAlign.Center
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "Habla con naturalidad o escribe tus síntomas principales.",
+                            text = "Habla con naturalidad o escribe tus síntomas para preparar tu consulta médica.",
                             fontSize = 13.sp,
                             color = Color(0xFF64748B),
                             textAlign = TextAlign.Center
                         )
 
-                        Spacer(modifier = Modifier.height(24.dp))
+                        Spacer(modifier = Modifier.height(22.dp))
 
-                        // Clean Circular Mic Button
-                        Box(
+                        // Clean Voice Dictation Button
+                        Surface(
+                            shape = CircleShape,
+                            color = Color(0xFFF0F9FF),
+                            border = BorderStroke(1.5.dp, Color(0xFF0284C7)),
                             modifier = Modifier
                                 .size(68.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFF0284C7))
-                                .clickable { startVoiceInput() },
-                            contentAlignment = Alignment.Center
+                                .clickable { startVoiceInput() }
                         ) {
-                            Text(
-                                text = "Voz",
-                                color = Color.White,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
+                            Box(contentAlignment = Alignment.Center) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(10.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(0xFF0284C7))
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "Dictar",
+                                        color = Color(0xFF0369A1),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            }
                         }
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "Toca para hablar",
-                            fontSize = 12.sp,
+                            text = "Toca para usar el micrófono en español",
+                            fontSize = 11.sp,
                             color = Color(0xFF64748B)
                         )
 
-                        Spacer(modifier = Modifier.height(20.dp))
+                        Spacer(modifier = Modifier.height(18.dp))
 
                         OutlinedTextField(
                             value = transcript,
                             onValueChange = { transcript = it },
                             placeholder = {
                                 Text(
-                                    "Ej. Desde hace cuatro horas tengo un dolor de cabeza fuerte del lado derecho...",
+                                    "Ej. Desde hace cuatro horas tengo un dolor de cabeza fuerte del lado derecho y me molesta la luz...",
                                     fontSize = 13.sp,
                                     color = Color(0xFF94A3B8)
                                 )
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(128.dp),
+                                .height(132.dp),
                             shape = RoundedCornerShape(14.dp),
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedContainerColor = Color.White,
@@ -263,43 +307,127 @@ fun PreConsultaScreen() {
                             )
                         )
 
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(14.dp))
 
-                        // Subtle Small Example Pills
-                        Row(
+                        // Subtle Wrapped Example Pills (FlowRow prevents clipping on mobile)
+                        Column(
                             modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Text(
-                                text = "Ejemplos:",
+                                text = "Casos de ejemplo rápido:",
                                 fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
                                 color = Color(0xFF94A3B8)
                             )
-                            GemmaLocalEngine.demoCases.forEach { demo ->
-                                Surface(
-                                    shape = RoundedCornerShape(50),
-                                    color = Color(0xFFF1F5F9),
-                                    modifier = Modifier.clickable { transcript = demo.transcript }
-                                ) {
-                                    Text(
-                                        text = demo.label,
-                                        fontSize = 11.sp,
-                                        color = Color(0xFF475569),
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                                    )
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                GemmaLocalEngine.demoCases.forEach { demo ->
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = Color(0xFFF8FAFC),
+                                        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                                        modifier = Modifier.clickable {
+                                            transcript = demo.transcript
+                                            if (demo.id == "fever") {
+                                                temperatureC = "38.8"
+                                                spo2Percent = "96"
+                                                showVitals = true
+                                            }
+                                        }
+                                    ) {
+                                        Text(
+                                            text = demo.label,
+                                            fontSize = 12.sp,
+                                            color = Color(0xFF334155),
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(24.dp))
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        // Optional Home Vitals Accordion
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = Color(0xFFF8FAFC),
+                            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(14.dp)) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { showVitals = !showVitals },
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Signos vitales medidos en casa (opcional)",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = Color(0xFF334155)
+                                    )
+                                    Text(
+                                        text = if (showVitals) "Ocultar" else "Agregar",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color(0xFF0284C7)
+                                    )
+                                }
+
+                                if (showVitals) {
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        CompactVitalField(
+                                            label = "Temp (°C)",
+                                            placeholder = "38.5",
+                                            value = temperatureC,
+                                            onValueChange = { temperatureC = it },
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        CompactVitalField(
+                                            label = "SpO2 (%)",
+                                            placeholder = "96",
+                                            value = spo2Percent,
+                                            onValueChange = { spo2Percent = it },
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        CompactVitalField(
+                                            label = "Pulso (lpm)",
+                                            placeholder = "84",
+                                            value = heartRateBpm,
+                                            onValueChange = { heartRateBpm = it },
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        CompactVitalField(
+                                            label = "Presión",
+                                            placeholder = "120/80",
+                                            value = bloodPressure,
+                                            onValueChange = { bloodPressure = it },
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(22.dp))
 
                         Button(
                             onClick = {
                                 if (transcript.isNotBlank()) {
                                     isLoadingFollowUps = true
                                     scope.launch {
-                                        val qs = GemmaLocalEngine.generateFollowUpQuestions(transcript)
+                                        val fullText = buildEnrichedTranscript()
+                                        val qs = GemmaLocalEngine.generateFollowUpQuestions(fullText)
                                         followUpQuestions = qs
                                         followUpAnswers.clear()
                                         qs.forEach { q ->
@@ -336,21 +464,42 @@ fun PreConsultaScreen() {
                 }
             }
 
-            // STEP 2: AYÚDAME CON MÁS INFORMACIÓN
+            // STEP 2: AYÚDAME CON MÁS INFORMACIÓN (1 A 3 PREGUNTAS DINÁMICAS)
             if (step == 2) {
                 Surface(
-                    shape = RoundedCornerShape(20.dp),
+                    shape = RoundedCornerShape(18.dp),
                     color = Color.White,
                     border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(modifier = Modifier.padding(24.dp)) {
-                        Text(
-                            text = "Ayúdame con más información",
-                            fontSize = 19.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFF0F172A)
-                        )
+                    Column(modifier = Modifier.padding(22.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Ayúdame con más información",
+                                fontSize = 19.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF0F172A),
+                                modifier = Modifier.weight(1f)
+                            )
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = Color(0xFFF0F9FF),
+                                border = BorderStroke(1.dp, Color(0xFFBAE6FD))
+                            ) {
+                                Text(
+                                    text = "${followUpQuestions.size} ${if (followUpQuestions.size == 1) "pregunta" else "preguntas"}",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFF0369A1),
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = "Responde estas breves preguntas para afinar tu resumen antes de enviarlo al médico.",
@@ -371,7 +520,7 @@ fun PreConsultaScreen() {
                                     Text(
                                         text = "${idx + 1}. ${q.question}",
                                         fontSize = 14.sp,
-                                        fontWeight = FontWeight.Medium,
+                                        fontWeight = FontWeight.SemiBold,
                                         color = Color(0xFF0F172A),
                                         modifier = Modifier.weight(1f)
                                     )
@@ -419,6 +568,29 @@ fun PreConsultaScreen() {
                                     }
                                 }
 
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                OutlinedTextField(
+                                    value = selected,
+                                    onValueChange = { followUpAnswers[q.id] = it },
+                                    placeholder = {
+                                        Text(
+                                            "O escribe tu respuesta aquí...",
+                                            fontSize = 12.sp,
+                                            color = Color(0xFF94A3B8)
+                                        )
+                                    },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedContainerColor = Color.White,
+                                        unfocusedContainerColor = Color(0xFFF8FAFC),
+                                        focusedBorderColor = Color(0xFF0284C7),
+                                        unfocusedBorderColor = Color(0xFFE2E8F0)
+                                    )
+                                )
+
                                 if (idx < followUpQuestions.size - 1) {
                                     Spacer(modifier = Modifier.height(16.dp))
                                     HorizontalDivider(color = Color(0xFFF1F5F9))
@@ -442,13 +614,15 @@ fun PreConsultaScreen() {
                                 onClick = {
                                     isLoadingSummary = true
                                     scope.launch {
+                                        val fullText = buildEnrichedTranscript()
                                         val (pat, doc) = GemmaLocalEngine.generateDeliverables(
-                                            transcript,
+                                            fullText,
                                             followUpQuestions,
                                             followUpAnswers.toMap()
                                         )
                                         patientDeliverable = pat
                                         doctorDeliverable = doc
+                                        checkedPrep.clear()
                                         isLoadingSummary = false
                                         step = 3
                                     }
@@ -469,7 +643,7 @@ fun PreConsultaScreen() {
                                         modifier = Modifier.size(18.dp)
                                     )
                                 } else {
-                                    Text("Ver mi resumen", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                    Text("Generar mi resumen", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                                 }
                             }
                         }
@@ -477,7 +651,7 @@ fun PreConsultaScreen() {
                 }
             }
 
-            // STEP 3: RESUMEN (PACIENTE / MÉDICO)
+            // STEP 3: RESUMEN Y BANNER DE PRIORIDAD CLÍNICA
             if (step == 3 && patientDeliverable != null && doctorDeliverable != null) {
                 val pat = patientDeliverable!!
                 val doc = doctorDeliverable!!
@@ -510,7 +684,7 @@ fun PreConsultaScreen() {
                     Surface(
                         shape = RoundedCornerShape(16.dp),
                         color = bgColor,
-                        border = BorderStroke(1.dp, borderColor),
+                        border = BorderStroke(1.5.dp, borderColor),
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(16.dp))
@@ -565,7 +739,7 @@ fun PreConsultaScreen() {
                         modifier = Modifier.weight(1f)
                     )
                     TabButton(
-                        title = "Ficha Médica",
+                        title = "Ficha Médica (SOAP)",
                         selected = activeResultTab == "DOCTOR",
                         onClick = { activeResultTab = "DOCTOR" },
                         modifier = Modifier.weight(1f)
@@ -574,21 +748,39 @@ fun PreConsultaScreen() {
 
                 if (activeResultTab == "PATIENT") {
                     Surface(
-                        shape = RoundedCornerShape(20.dp),
+                        shape = RoundedCornerShape(18.dp),
                         color = Color.White,
                         border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(
-                            modifier = Modifier.padding(24.dp),
+                            modifier = Modifier.padding(22.dp),
                             verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
-                            Text(
-                                text = "Tu pase de pre-consulta",
-                                fontSize = 19.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color(0xFF0F172A)
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Tu pase de pre-consulta",
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFF0F172A)
+                                )
+                                TextButton(
+                                    onClick = {
+                                        tts?.speak(
+                                            "${pat.urgencyNotice}. ${pat.friendlySummary}",
+                                            TextToSpeech.QUEUE_FLUSH,
+                                            null,
+                                            "summary_tts"
+                                        )
+                                    }
+                                ) {
+                                    Text("Escuchar", fontSize = 12.sp, color = Color(0xFF0284C7))
+                                }
+                            }
 
                             SectionBlock(
                                 label = "1. LO QUE REPORTASTE",
@@ -621,17 +813,46 @@ fun PreConsultaScreen() {
 
                             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Text(
-                                    text = "3. QUÉ TENER A LA MANO",
+                                    text = "3. QUÉ TENER A LA MANO (TOCA PARA MARCAR)",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = Color(0xFF94A3B8)
                                 )
-                                pat.prepChecklist.forEach { item ->
-                                    Text(
-                                        text = "• $item",
-                                        fontSize = 13.sp,
-                                        color = Color(0xFF475569)
-                                    )
+                                pat.prepChecklist.forEachIndexed { idx, item ->
+                                    val isDone = checkedPrep[idx] == true
+                                    Surface(
+                                        shape = RoundedCornerShape(10.dp),
+                                        color = if (isDone) Color(0xFFF0FDF4) else Color(0xFFF8FAFC),
+                                        border = BorderStroke(
+                                            1.dp,
+                                            if (isDone) Color(0xFFBBF7D0) else Color(0xFFE2E8F0)
+                                        ),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { checkedPrep[idx] = !isDone }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Surface(
+                                                shape = RoundedCornerShape(4.dp),
+                                                color = if (isDone) Color(0xFF10B981) else Color.White,
+                                                border = BorderStroke(
+                                                    1.dp,
+                                                    if (isDone) Color(0xFF10B981) else Color(0xFFCBD5E1)
+                                                ),
+                                                modifier = Modifier.size(16.dp)
+                                            ) {}
+                                            Spacer(modifier = Modifier.width(10.dp))
+                                            Text(
+                                                text = item,
+                                                fontSize = 13.sp,
+                                                color = if (isDone) Color(0xFF64748B) else Color(0xFF334155),
+                                                textDecoration = if (isDone) TextDecoration.LineThrough else TextDecoration.None
+                                            )
+                                        }
+                                    }
                                 }
                             }
 
@@ -646,6 +867,8 @@ fun PreConsultaScreen() {
                                     onClick = {
                                         val shareText = buildString {
                                             appendLine("Pase de Pre-Consulta")
+                                            appendLine(pat.urgencyNotice)
+                                            appendLine()
                                             appendLine(pat.friendlySummary)
                                             appendLine()
                                             appendLine("Preguntas para el médico:")
@@ -663,20 +886,20 @@ fun PreConsultaScreen() {
                                     },
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7))
                                 ) {
-                                    Text("Compartir", fontSize = 12.sp, color = Color.White)
+                                    Text("Compartir resumen", fontSize = 12.sp, color = Color.White)
                                 }
                             }
                         }
                     }
                 } else {
                     Surface(
-                        shape = RoundedCornerShape(20.dp),
+                        shape = RoundedCornerShape(18.dp),
                         color = Color.White,
                         border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(
-                            modifier = Modifier.padding(24.dp),
+                            modifier = Modifier.padding(22.dp),
                             verticalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
                             Row(
@@ -685,13 +908,13 @@ fun PreConsultaScreen() {
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "Ficha clínica",
-                                    fontSize = 18.sp,
+                                    text = "Ficha clínica estructurada",
+                                    fontSize = 17.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = Color(0xFF0F172A)
                                 )
 
-                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                     TextButton(onClick = { clinicalFramework = "SOAP" }) {
                                         Text(
                                             "SOAP",
@@ -716,16 +939,19 @@ fun PreConsultaScreen() {
                                     border = BorderStroke(1.dp, Color(0xFFFECDD3)),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Column(modifier = Modifier.padding(12.dp)) {
+                                    Column(
+                                        modifier = Modifier.padding(12.dp),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
                                         Text(
-                                            text = "Signos de alerta (Red Flags)",
-                                            fontSize = 12.sp,
-                                            fontWeight = FontWeight.SemiBold,
+                                            text = "SIGNOS DE ALERTA DETECTADOS",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
                                             color = Color(0xFF9F1239)
                                         )
                                         doc.redFlags.forEach { rf ->
                                             Text(
-                                                text = "• $rf",
+                                                text = "- $rf",
                                                 fontSize = 12.sp,
                                                 color = Color(0xFF881337)
                                             )
@@ -764,6 +990,38 @@ fun PreConsultaScreen() {
                                     )
                                 }
                             }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                OutlinedButton(onClick = { step = 1 }) {
+                                    Text("Nueva consulta", fontSize = 12.sp)
+                                }
+                                Button(
+                                    onClick = {
+                                        val noteText = if (clinicalFramework == "SOAP") {
+                                            "SOAP\nS: ${doc.soap.subjective}\nO: ${doc.soap.objective}\nA: ${doc.soap.assessment}\nP: ${doc.soap.plan}"
+                                        } else {
+                                            "ISBAR\nI: ${doc.isbar.identification}\nS: ${doc.isbar.situation}\nB: ${doc.isbar.background}\nA: ${doc.isbar.assessment}\nR: ${doc.isbar.recommendation}"
+                                        }
+                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                        clipboard.setPrimaryClip(ClipData.newPlainText("Nota Clínica", noteText))
+                                        copiedNote = true
+                                        scope.launch {
+                                            delay(2000)
+                                            copiedNote = false
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F172A))
+                                ) {
+                                    Text(
+                                        text = if (copiedNote) "Nota copiada" else "Copiar nota $clinicalFramework",
+                                        fontSize = 12.sp,
+                                        color = Color.White
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -773,13 +1031,61 @@ fun PreConsultaScreen() {
 }
 
 @Composable
-private fun StepIndicatorLabel(number: Int, label: String, active: Boolean) {
-    Text(
-        text = "$number. $label",
-        fontSize = 12.sp,
-        fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
-        color = if (active) Color(0xFF0284C7) else Color(0xFF94A3B8)
-    )
+private fun CompactVitalField(
+    label: String,
+    placeholder: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Medium,
+            color = Color(0xFF64748B)
+        )
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            placeholder = {
+                Text(placeholder, fontSize = 12.sp, color = Color(0xFF94A3B8))
+            },
+            singleLine = true,
+            shape = RoundedCornerShape(10.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = Color.White,
+                unfocusedContainerColor = Color.White,
+                focusedBorderColor = Color(0xFF0284C7),
+                unfocusedBorderColor = Color(0xFFE2E8F0)
+            ),
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
+}
+
+@Composable
+private fun StepIndicatorPill(number: Int, label: String, active: Boolean, completed: Boolean) {
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = when {
+            active -> Color(0xFFE0F2FE)
+            completed -> Color(0xFFF1F5F9)
+            else -> Color.Transparent
+        }
+    ) {
+        Text(
+            text = "$number. $label",
+            fontSize = 11.sp,
+            fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+            color = when {
+                active -> Color(0xFF0369A1)
+                completed -> Color(0xFF475569)
+                else -> Color(0xFF94A3B8)
+            },
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+        )
+    }
 }
 
 @Composable
