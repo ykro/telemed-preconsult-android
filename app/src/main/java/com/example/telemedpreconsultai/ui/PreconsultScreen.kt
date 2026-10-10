@@ -80,6 +80,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -325,15 +326,12 @@ fun PreConsultaNativeApp() {
             }
         }
     ) { innerPadding ->
-        AnimatedContent(
-            targetState = step,
-            transitionSpec = { fadeIn() togetherWith fadeOut() },
-            label = "step_transition",
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-        ) { currentStep ->
-            when (currentStep) {
+        ) {
+            when (step) {
                 1 -> Step1NativeSymptomScreen(
                     transcript = transcript,
                     onTranscriptChange = { transcript = it },
@@ -866,7 +864,7 @@ private fun Step1NativeSymptomScreen(
             }
         }
 
-        // Clean 2x2 Grid of Vitals Cards (No Nested Box-in-Box, Baseline-Aligned Units + Clinical Status)
+        // Clean 2x2 Grid of Vitals Cards (Uniform Height, Crisp White Surface + Clinical Status Badges)
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
                 text = "SIGNOS VITALES EN CASA (OPCIONAL)",
@@ -887,7 +885,7 @@ private fun Step1NativeSymptomScreen(
                     value = temperatureC,
                     onValueChange = onTempChange,
                     accentColor = Color(0xFFF59E0B),
-                    statusBadge = if (tempAlert) "Fiebre" else null,
+                    statusBadge = if (temperatureC.isBlank()) "Opcional" else if (tempAlert) "Fiebre" else "Normal",
                     isAlert = tempAlert,
                     modifier = Modifier.weight(1f)
                 )
@@ -898,7 +896,7 @@ private fun Step1NativeSymptomScreen(
                     value = spo2Percent,
                     onValueChange = onSpo2Change,
                     accentColor = Color(0xFF0284C7),
-                    statusBadge = if (spo2Alert) "Vigilar" else null,
+                    statusBadge = if (spo2Percent.isBlank()) "Opcional" else if (spo2Alert) "Vigilar" else "Normal",
                     isAlert = spo2Alert,
                     modifier = Modifier.weight(1f)
                 )
@@ -911,7 +909,7 @@ private fun Step1NativeSymptomScreen(
                     value = heartRateBpm,
                     onValueChange = onHrChange,
                     accentColor = Color(0xFF10B981),
-                    statusBadge = if (hrAlert) "Elevado" else null,
+                    statusBadge = if (heartRateBpm.isBlank()) "Opcional" else if (hrAlert) "Elevado" else "Normal",
                     isAlert = hrAlert,
                     modifier = Modifier.weight(1f)
                 )
@@ -922,7 +920,7 @@ private fun Step1NativeSymptomScreen(
                     value = bloodPressure,
                     onValueChange = onBpChange,
                     accentColor = Color(0xFF6366F1),
-                    statusBadge = if (bpAlert) "Elevada" else null,
+                    statusBadge = if (bloodPressure.isBlank()) "Opcional" else if (bpAlert) "Elevada" else "Normal",
                     isAlert = bpAlert,
                     modifier = Modifier.weight(1f)
                 )
@@ -939,58 +937,69 @@ private fun NativeVitalMetricCard(
     value: String,
     onValueChange: (String) -> Unit,
     accentColor: Color,
-    statusBadge: String?,
+    statusBadge: String,
     isAlert: Boolean,
     modifier: Modifier = Modifier
 ) {
+    val isFilled = value.isNotBlank()
+    val badgeBg = when {
+        isAlert -> Color(0xFFFEF3C7)
+        isFilled -> Color(0xFFECFDF5)
+        else -> Color(0xFFF1F5F9)
+    }
+    val badgeText = when {
+        isAlert -> Color(0xFFB45309)
+        isFilled -> Color(0xFF047857)
+        else -> Color(0xFF64748B)
+    }
+    val stripColor = if (isAlert) Color(0xFFF59E0B) else accentColor
+
     Surface(
         shape = RoundedCornerShape(14.dp),
-        color = if (isAlert) Color(0xFFFFFBEB) else Color.White,
+        color = Color.White,
+        shadowElevation = 1.dp,
         border = BorderStroke(
             width = 1.dp,
             color = if (isAlert) Color(0xFFFCD34D) else Color(0xFFE2E8F0)
         ),
         modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .drawBehind {
+                drawRect(
+                    color = stripColor,
+                    topLeft = Offset.Zero,
+                    size = Size(width = 4.dp.toPx(), height = size.height)
+                )
+            }
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            modifier = Modifier.padding(start = 14.dp, top = 10.dp, end = 12.dp, bottom = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(20.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                Text(
+                    text = title,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFF475569)
+                )
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = badgeBg
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(7.dp)
-                            .clip(CircleShape)
-                            .background(if (isAlert) Color(0xFFD97706) else accentColor)
-                    )
                     Text(
-                        text = title,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFF475569)
+                        text = statusBadge,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = badgeText,
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
                     )
-                }
-                if (statusBadge != null) {
-                    Surface(
-                        shape = RoundedCornerShape(50),
-                        color = Color(0xFFFEF3C7)
-                    ) {
-                        Text(
-                            text = statusBadge,
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFFB45309),
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
-                    }
                 }
             }
 
@@ -1004,7 +1013,7 @@ private fun NativeVitalMetricCard(
                     onValueChange = onValueChange,
                     singleLine = true,
                     textStyle = TextStyle(
-                        fontSize = 20.sp,
+                        fontSize = 21.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF0F172A)
                     ),
@@ -1014,7 +1023,7 @@ private fun NativeVitalMetricCard(
                             if (value.isEmpty()) {
                                 Text(
                                     text = placeholder,
-                                    fontSize = 20.sp,
+                                    fontSize = 21.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = Color(0xFFCBD5E1)
                                 )
@@ -1042,8 +1051,15 @@ private fun Step2NativeQuestionsScreen(
     onSelectAnswer: (Int, String) -> Unit,
     onSpeakQuestion: (String) -> Unit
 ) {
-    // Track which question IDs have their custom free-text input expanded
+    var activeIdx by remember { mutableStateOf(0) }
     val expandedCustomIds = remember { mutableStateMapOf<Int, Boolean>() }
+
+    if (questions.isEmpty()) return
+    val safeIdx = activeIdx.coerceIn(0, questions.lastIndex)
+    val q = questions[safeIdx]
+    val selected = answers[q.id] ?: ""
+    val isCustomValue = selected.isNotBlank() && !q.quickOptions.contains(selected)
+    val showCustomInput = expandedCustomIds[q.id] == true || isCustomValue
 
     Column(
         modifier = Modifier
@@ -1052,152 +1068,310 @@ private fun Step2NativeQuestionsScreen(
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        questions.forEachIndexed { idx, q ->
-            val selected = answers[q.id] ?: ""
-            val isCustomValue = selected.isNotBlank() && !q.quickOptions.contains(selected)
-            val showCustomInput = expandedCustomIds[q.id] == true || isCustomValue
-
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = Color.White,
-                shadowElevation = 1.dp,
-                border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+        // 1. Interactive Question Stepper Pills (1-Question-at-a-Time Focus)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            questions.forEachIndexed { idx, item ->
+                val isCurrent = idx == safeIdx
+                val isAnswered = !answers[item.id].isNullOrBlank()
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = when {
+                        isCurrent -> Color(0xFF0284C7)
+                        isAnswered -> Color(0xFFF0F9FF)
+                        else -> Color.White
+                    },
+                    border = BorderStroke(
+                        1.dp,
+                        when {
+                            isCurrent -> Color(0xFF0284C7)
+                            isAnswered -> Color(0xFFBAE6FD)
+                            else -> Color(0xFFE2E8F0)
+                        }
+                    ),
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable { activeIdx = idx }
                 ) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
                     ) {
-                        Surface(
-                            shape = RoundedCornerShape(50),
-                            color = Color(0xFFF0F9FF)
-                        ) {
-                            Text(
-                                text = "PREGUNTA ${idx + 1} DE ${questions.size}",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFF0284C7),
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                            )
-                        }
-
-                        Surface(
-                            shape = CircleShape,
-                            color = Color(0xFFF1F5F9),
-                            modifier = Modifier
-                                .size(32.dp)
-                                .clip(CircleShape)
-                                .clickable { onSpeakQuestion(q.question) }
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                VectorSpeakerIcon(color = Color(0xFF0284C7))
+                        Text(
+                            text = "Pregunta ${idx + 1}",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = when {
+                                isCurrent -> Color.White
+                                isAnswered -> Color(0xFF0369A1)
+                                else -> Color(0xFF64748B)
                             }
-                        }
+                        )
+                    }
+                }
+            }
+        }
+
+        // 2. Focused Active Question Hero Card
+        Surface(
+            shape = RoundedCornerShape(18.dp),
+            color = Color.White,
+            shadowElevation = 2.dp,
+            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        color = Color(0xFFF0F9FF)
+                    ) {
+                        Text(
+                            text = "PREGUNTA ${safeIdx + 1} DE ${questions.size}",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF0284C7),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
                     }
 
-                    Text(
-                        text = q.question,
-                        fontSize = 15.sp,
-                        lineHeight = 21.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF0F172A)
-                    )
-
-                    // Native Full-Width Radio Option Cards (Clean, No Duplicate TextField!)
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        q.quickOptions.forEach { opt ->
-                            val isSelected = selected == opt && !showCustomInput
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = if (isSelected) Color(0xFFF0F9FF) else Color(0xFFF8FAFC),
-                                border = BorderStroke(
-                                    width = if (isSelected) 1.5.dp else 1.dp,
-                                    color = if (isSelected) Color(0xFF0284C7) else Color(0xFFE2E8F0)
-                                ),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .clickable {
-                                        expandedCustomIds[q.id] = false
-                                        onSelectAnswer(q.id, opt)
-                                    }
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    NativeRadioCircle(selected = isSelected)
-                                    Text(
-                                        text = opt,
-                                        fontSize = 13.sp,
-                                        lineHeight = 18.sp,
-                                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                                        color = if (isSelected) Color(0xFF0F172A) else Color(0xFF334155),
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                }
-                            }
+                    Surface(
+                        shape = CircleShape,
+                        color = Color(0xFFF0F9FF),
+                        border = BorderStroke(1.dp, Color(0xFFBAE6FD)),
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(CircleShape)
+                            .clickable { onSpeakQuestion(q.question) }
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            VectorSpeakerIcon(color = Color(0xFF0284C7))
                         }
+                    }
+                }
 
-                        // Compact Toggle Option for Custom Free-Text Response
+                Text(
+                    text = q.question,
+                    fontSize = 16.sp,
+                    lineHeight = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF0F172A)
+                )
+
+                // Full-Width Tactile Radio Option Cards
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    q.quickOptions.forEach { opt ->
+                        val isSelected = selected == opt && !showCustomInput
                         Surface(
                             shape = RoundedCornerShape(12.dp),
-                            color = if (showCustomInput) Color(0xFFF0F9FF) else Color.White,
+                            color = if (isSelected) Color(0xFFF0F9FF) else Color(0xFFF8FAFC),
                             border = BorderStroke(
-                                width = 1.dp,
-                                color = if (showCustomInput) Color(0xFF0284C7) else Color(0xFFE2E8F0)
+                                width = if (isSelected) 1.5.dp else 1.dp,
+                                color = if (isSelected) Color(0xFF0284C7) else Color(0xFFE2E8F0)
                             ),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(12.dp))
                                 .clickable {
-                                    val nextState = !showCustomInput
-                                    expandedCustomIds[q.id] = nextState
-                                    if (nextState && q.quickOptions.contains(selected)) {
-                                        onSelectAnswer(q.id, "")
-                                    } else if (!nextState && selected.isBlank()) {
-                                        q.quickOptions.firstOrNull()?.let { onSelectAnswer(q.id, it) }
-                                    }
+                                    expandedCustomIds[q.id] = false
+                                    onSelectAnswer(q.id, opt)
                                 }
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                NativeRadioCircle(selected = showCustomInput)
+                                NativeRadioCircle(selected = isSelected)
                                 Text(
-                                    text = "Escribir otra respuesta...",
+                                    text = opt,
                                     fontSize = 13.sp,
-                                    fontWeight = if (showCustomInput) FontWeight.SemiBold else FontWeight.Medium,
-                                    color = if (showCustomInput) Color(0xFF0284C7) else Color(0xFF64748B)
+                                    lineHeight = 18.sp,
+                                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
+                                    color = if (isSelected) Color(0xFF0F172A) else Color(0xFF334155),
+                                    modifier = Modifier.weight(1f)
                                 )
                             }
                         }
                     }
 
-                    if (showCustomInput) {
-                        OutlinedTextField(
-                            value = if (q.quickOptions.contains(selected)) "" else selected,
-                            onValueChange = { onSelectAnswer(q.id, it) },
-                            placeholder = {
-                                Text("Describe tu respuesta con tus palabras...", fontSize = 13.sp, color = Color(0xFF94A3B8))
-                            },
-                            singleLine = true,
-                            shape = RoundedCornerShape(12.dp),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedContainerColor = Color.White,
-                                unfocusedContainerColor = Color(0xFFF8FAFC),
-                                focusedBorderColor = Color(0xFF0284C7),
-                                unfocusedBorderColor = Color(0xFFCBD5E1)
-                            ),
-                            modifier = Modifier.fillMaxWidth()
+                    // Compact Toggle Option for Custom Free-Text Response
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (showCustomInput) Color(0xFFF0F9FF) else Color.White,
+                        border = BorderStroke(
+                            width = 1.dp,
+                            color = if (showCustomInput) Color(0xFF0284C7) else Color(0xFFE2E8F0)
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable {
+                                val nextState = !showCustomInput
+                                expandedCustomIds[q.id] = nextState
+                                if (nextState && q.quickOptions.contains(selected)) {
+                                    onSelectAnswer(q.id, "")
+                                } else if (!nextState && selected.isBlank()) {
+                                    q.quickOptions.firstOrNull()?.let { onSelectAnswer(q.id, it) }
+                                }
+                            }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            NativeRadioCircle(selected = showCustomInput)
+                            Text(
+                                text = "Escribir otra respuesta...",
+                                fontSize = 13.sp,
+                                fontWeight = if (showCustomInput) FontWeight.SemiBold else FontWeight.Medium,
+                                color = if (showCustomInput) Color(0xFF0284C7) else Color(0xFF64748B)
+                            )
+                        }
+                    }
+                }
+
+                if (showCustomInput) {
+                    OutlinedTextField(
+                        value = if (q.quickOptions.contains(selected)) "" else selected,
+                        onValueChange = { onSelectAnswer(q.id, it) },
+                        placeholder = {
+                            Text("Describe tu respuesta con tus palabras...", fontSize = 13.sp, color = Color(0xFF94A3B8))
+                        },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedContainerColor = Color.White,
+                            unfocusedContainerColor = Color(0xFFF8FAFC),
+                            focusedBorderColor = Color(0xFF0284C7),
+                            unfocusedBorderColor = Color(0xFFCBD5E1)
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                // Inline Question Stepper Footer ("Anterior" / "Siguiente pregunta")
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 2.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (safeIdx > 0) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = Color(0xFFF1F5F9),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable { activeIdx = safeIdx - 1 }
+                        ) {
+                            Text(
+                                text = "Anterior",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF475569),
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
+                            )
+                        }
+                    } else {
+                        Spacer(modifier = Modifier.width(1.dp))
+                    }
+
+                    if (safeIdx < questions.lastIndex) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = Color(0xFFE0F2FE),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .clickable { activeIdx = safeIdx + 1 }
+                        ) {
+                            Text(
+                                text = "Siguiente pregunta",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF0284C7),
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Compact 1-Line Summary Cards for All Questions (Instant Review & One-Tap Edit)
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                text = "RESUMEN DE RESPUESTAS SELECCIONADAS",
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF64748B)
+            )
+            questions.forEachIndexed { idx, item ->
+                val ans = answers[item.id].orEmpty()
+                val isCurrent = idx == safeIdx
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (isCurrent) Color(0xFFF8FAFC) else Color.White,
+                    border = BorderStroke(
+                        1.dp,
+                        if (isCurrent) Color(0xFFBAE6FD) else Color(0xFFE2E8F0)
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable { activeIdx = idx }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = if (isCurrent) Color(0xFF0284C7) else Color(0xFFE0F2FE)
+                            ) {
+                                Text(
+                                    text = "P${idx + 1}",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isCurrent) Color.White else Color(0xFF0284C7),
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                            Text(
+                                text = ans.ifBlank { "Sin responder" },
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF1E293B),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        Text(
+                            text = if (isCurrent) "Activa" else "Editar",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isCurrent) Color(0xFF64748B) else Color(0xFF0284C7),
+                            modifier = Modifier.padding(start = 8.dp)
                         )
                     }
                 }
@@ -1312,37 +1486,42 @@ private fun Step3NativeResultsScreen(
         isRoutine -> "PRIORIDAD CLÍNICA · CONSULTA RUTINARIA"
         else -> "PRIORIDAD CLÍNICA · CONSULTA PRIORITARIA HOY"
     }
+    val compactStripSummary = when {
+        isUrgent -> "Atención prioritaria inmediata · Valoración urgente"
+        isRoutine -> "Consulta rutinaria · Sin signos de alarma"
+        else -> "Prioridad médica hoy · Evaluación prioritaria"
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // On Tab 0 ("Mi Pase"): Full Hero Clinical Callout Banner
-        // On Tabs 1 & 2 ("Preparación", "Ficha Médica"): Compact 1-Line Priority Strip so content takes center stage
+        // On Tabs 1 & 2 ("Preparación", "Ficha Médica"): Complete 1-Line Priority Strip
         if (pat.urgencyNotice.isNotBlank()) {
             if (activeBottomTab == 0) {
                 Surface(
-                    shape = RoundedCornerShape(18.dp),
+                    shape = RoundedCornerShape(16.dp),
                     color = bgColor,
-                    shadowElevation = 2.dp,
+                    shadowElevation = 1.dp,
                     border = BorderStroke(1.5.dp, borderColor),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(18.dp))
+                        .clip(RoundedCornerShape(16.dp))
                         .drawBehind {
                             drawRect(
                                 color = borderColor,
                                 topLeft = Offset.Zero,
-                                size = Size(width = 7.dp.toPx(), height = size.height)
+                                size = Size(width = 6.dp.toPx(), height = size.height)
                             )
                         }
                 ) {
                     Column(
-                        modifier = Modifier.padding(start = 20.dp, top = 14.dp, end = 16.dp, bottom = 14.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        modifier = Modifier.padding(start = 18.dp, top = 12.dp, end = 14.dp, bottom = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Surface(
                             shape = RoundedCornerShape(6.dp),
@@ -1353,13 +1532,13 @@ private fun Step3NativeResultsScreen(
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                             )
                         }
                         Text(
                             text = pat.urgencyNotice,
-                            fontSize = 16.sp,
-                            lineHeight = 22.sp,
+                            fontSize = 14.sp,
+                            lineHeight = 19.sp,
                             fontWeight = FontWeight.Bold,
                             color = textColor
                         )
@@ -1373,7 +1552,7 @@ private fun Step3NativeResultsScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
@@ -1390,11 +1569,12 @@ private fun Step3NativeResultsScreen(
                             )
                         }
                         Text(
-                            text = pat.urgencyNotice,
+                            text = compactStripSummary,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = textColor,
-                            maxLines = 1
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -1411,8 +1591,8 @@ private fun Step3NativeResultsScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                    modifier = Modifier.padding(15.dp),
+                    verticalArrangement = Arrangement.spacedBy(11.dp)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -1422,13 +1602,13 @@ private fun Step3NativeResultsScreen(
                         Column {
                             Text(
                                 text = "Tu pase de pre-consulta",
-                                fontSize = 17.sp,
+                                fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF0F172A)
                             )
                             Text(
                                 text = "Resumen estructurado para mostrar a tu médico",
-                                fontSize = 12.sp,
+                                fontSize = 11.sp,
                                 color = Color(0xFF64748B)
                             )
                         }
@@ -1437,7 +1617,7 @@ private fun Step3NativeResultsScreen(
                             color = Color(0xFFF0F9FF),
                             border = BorderStroke(1.dp, Color(0xFFBAE6FD)),
                             modifier = Modifier
-                                .size(38.dp)
+                                .size(36.dp)
                                 .clip(CircleShape)
                                 .clickable { onSpeakSummary() }
                         ) {
@@ -1484,40 +1664,44 @@ private fun Step3NativeResultsScreen(
                         ) {
                             Text(
                                 text = rawSymptomTranscript.ifBlank { pat.friendlySummary },
-                                fontSize = 14.sp,
-                                lineHeight = 20.sp,
+                                fontSize = 13.sp,
+                                lineHeight = 18.sp,
                                 color = Color(0xFF1E293B),
-                                modifier = Modifier.padding(12.dp)
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
                             )
                         }
                     }
 
-                    // 3. Structured Follow-Up Answers
-                    if (followUpQuestions.isNotEmpty()) {
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    // 3. Unified Divided Table for Follow-Up Answers (Fits 100% Above the Fold)
+                    val answeredQuestions = followUpQuestions.filter { !followUpAnswers[it.id].isNullOrBlank() }
+                    if (answeredQuestions.isNotEmpty()) {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(
                                 text = "RESPUESTAS DE SEGUIMIENTO",
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF64748B)
                             )
-                            followUpQuestions.forEach { q ->
-                                val ans = followUpAnswers[q.id]
-                                if (!ans.isNullOrBlank()) {
-                                    Surface(
-                                        shape = RoundedCornerShape(10.dp),
-                                        color = Color(0xFFF8FAFC),
-                                        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = Color(0xFFF8FAFC),
+                                border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column {
+                                    answeredQuestions.forEachIndexed { idx, q ->
+                                        val ans = followUpAnswers[q.id].orEmpty()
                                         Column(
-                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                                             verticalArrangement = Arrangement.spacedBy(2.dp)
                                         ) {
                                             Text(
                                                 text = q.question,
                                                 fontSize = 11.sp,
-                                                color = Color(0xFF64748B)
+                                                lineHeight = 14.sp,
+                                                color = Color(0xFF64748B),
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
                                             )
                                             Text(
                                                 text = ans,
@@ -1525,6 +1709,9 @@ private fun Step3NativeResultsScreen(
                                                 fontWeight = FontWeight.SemiBold,
                                                 color = Color(0xFF0F172A)
                                             )
+                                        }
+                                        if (idx < answeredQuestions.lastIndex) {
+                                            HorizontalDivider(color = Color(0xFFE2E8F0), thickness = 1.dp)
                                         }
                                     }
                                 }
@@ -1538,7 +1725,7 @@ private fun Step3NativeResultsScreen(
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(48.dp)
+                            .height(46.dp)
                     ) {
                         Text(
                             text = "Compartir mi pase por WhatsApp / Correo",
@@ -1689,8 +1876,8 @@ private fun Step3NativeResultsScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                    modifier = Modifier.padding(15.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -1699,7 +1886,7 @@ private fun Step3NativeResultsScreen(
                     ) {
                         Text(
                             text = "Ficha Clínica",
-                            fontSize = 17.sp,
+                            fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF0F172A)
                         )
@@ -1725,7 +1912,7 @@ private fun Step3NativeResultsScreen(
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = if (active) Color(0xFF0284C7) else Color(0xFF64748B),
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
                                     )
                                 }
                             }
@@ -1734,18 +1921,18 @@ private fun Step3NativeResultsScreen(
 
                     if (doc.redFlags.isNotEmpty()) {
                         Surface(
-                            shape = RoundedCornerShape(12.dp),
+                            shape = RoundedCornerShape(10.dp),
                             color = Color(0xFFFFF1F2),
                             border = BorderStroke(1.dp, Color(0xFFFECDD3)),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(
-                                modifier = Modifier.padding(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
                             ) {
                                 Text(
                                     text = "SIGNOS DE ALERTA DETECTADOS",
-                                    fontSize = 10.sp,
+                                    fontSize = 9.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFF9F1239)
                                 )
@@ -1753,6 +1940,7 @@ private fun Step3NativeResultsScreen(
                                     Text(
                                         text = "• $rf",
                                         fontSize = 12.sp,
+                                        lineHeight = 16.sp,
                                         color = Color(0xFF881337)
                                     )
                                 }
@@ -1790,7 +1978,7 @@ private fun Step3NativeResultsScreen(
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F172A)),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(48.dp)
+                            .height(46.dp)
                     ) {
                         Text(
                             text = if (copiedNote) "Nota copiada al portapapeles" else "Copiar nota $clinicalFramework",
@@ -1835,25 +2023,25 @@ private fun PassVitalChip(label: String, value: String, modifier: Modifier = Mod
 
 @Composable
 private fun NativeClinicalBlock(label: String, content: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
         Text(
             text = label,
-            fontSize = 11.sp,
+            fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
             color = Color(0xFF0284C7)
         )
         Surface(
-            shape = RoundedCornerShape(12.dp),
+            shape = RoundedCornerShape(10.dp),
             color = Color(0xFFF8FAFC),
             border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
             modifier = Modifier.fillMaxWidth()
         ) {
             Text(
                 text = content,
-                fontSize = 13.sp,
-                lineHeight = 19.sp,
+                fontSize = 12.sp,
+                lineHeight = 17.sp,
                 color = Color(0xFF334155),
-                modifier = Modifier.padding(12.dp)
+                modifier = Modifier.padding(horizontal = 11.dp, vertical = 8.dp)
             )
         }
     }
