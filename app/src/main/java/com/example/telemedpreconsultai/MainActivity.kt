@@ -204,9 +204,9 @@ fun PreConsultaNativeApp() {
             if (step == 1) {
                 NativeBottomActionSheet(
                     primaryLabel = if (isLoadingFollowUps) "Analizando síntomas..." else "Continuar",
-                    enabled = transcript.isNotBlank() && !isLoadingFollowUps,
+                    enabled = transcript.isNotBlank(),
                     isLoading = isLoadingFollowUps,
-                    helperText = "Paso 1 de 3 · Evaluación clínica inicial",
+                    helperText = null,
                     onClick = {
                         isLoadingFollowUps = true
                         scope.launch {
@@ -227,10 +227,10 @@ fun PreConsultaNativeApp() {
             } else if (step == 2) {
                 val answeredCount = followUpQuestions.count { !followUpAnswers[it.id].isNullOrBlank() }
                 NativeBottomActionSheet(
-                    primaryLabel = if (isLoadingSummary) "Generando pase y ficha médica..." else "Generar mi resumen clínico",
-                    enabled = !isLoadingSummary && followUpQuestions.isNotEmpty() && answeredCount == followUpQuestions.size,
+                    primaryLabel = if (isLoadingSummary) "Generando pase y ficha médica..." else "Ver mi resumen clínico",
+                    enabled = followUpQuestions.isNotEmpty() && answeredCount == followUpQuestions.size,
                     isLoading = isLoadingSummary,
-                    helperText = "$answeredCount de ${followUpQuestions.size} respuestas completadas",
+                    helperText = null,
                     onClick = {
                         isLoadingSummary = true
                         scope.launch {
@@ -383,6 +383,13 @@ fun PreConsultaNativeApp() {
                         Step3NativeResultsScreen(
                             pat = pat,
                             doc = doc,
+                            rawSymptomTranscript = transcript,
+                            temperatureC = temperatureC,
+                            spo2Percent = spo2Percent,
+                            heartRateBpm = heartRateBpm,
+                            bloodPressure = bloodPressure,
+                            followUpQuestions = followUpQuestions,
+                            followUpAnswers = followUpAnswers,
                             activeBottomTab = resultBottomTab,
                             clinicalFramework = clinicalFramework,
                             onChangeFramework = { clinicalFramework = it },
@@ -390,10 +397,10 @@ fun PreConsultaNativeApp() {
                             onTogglePrep = { idx -> checkedPrep[idx] = !(checkedPrep[idx] ?: false) },
                             copiedNote = copiedNote,
                             onCopyNote = {
-                                val noteText = if (clinicalFramework == "SOAP") {
-                                    "SOAP\nS: ${doc.soap.subjective}\nO: ${doc.soap.objective}\nA: ${doc.soap.assessment}\nP: ${doc.soap.plan}"
-                                } else {
-                                    "ISBAR\nI: ${doc.isbar.identification}\nS: ${doc.isbar.situation}\nB: ${doc.isbar.background}\nA: ${doc.isbar.assessment}\nR: ${doc.isbar.recommendation}"
+                                val noteText = when (clinicalFramework) {
+                                    "SOAP" -> "SOAP\nS: ${doc.soap.subjective}\nO: ${doc.soap.objective}\nA: ${doc.soap.assessment}\nP: ${doc.soap.plan}"
+                                    "OPQRST" -> "OPQRST\nAparición: ${doc.opqrst.onset}\nProvocación: ${doc.opqrst.provocation}\nCalidad: ${doc.opqrst.quality}\nIrradiación: ${doc.opqrst.radiation}\nSeveridad: ${doc.opqrst.severity}\nTiempo: ${doc.opqrst.time}"
+                                    else -> "ISBAR\nI: ${doc.isbar.identification}\nS: ${doc.isbar.situation}\nB: ${doc.isbar.background}\nA: ${doc.isbar.assessment}\nR: ${doc.isbar.recommendation}"
                                 }
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                 clipboard.setPrimaryClip(ClipData.newPlainText("Ficha Médica", noteText))
@@ -554,13 +561,22 @@ private fun NativeBottomActionSheet(
     primaryLabel: String,
     enabled: Boolean,
     isLoading: Boolean,
-    helperText: String,
+    helperText: String?,
     onClick: () -> Unit
 ) {
     Surface(
         color = Color.White,
-        shadowElevation = 12.dp,
-        modifier = Modifier.fillMaxWidth()
+        shadowElevation = 10.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .drawBehind {
+                drawLine(
+                    color = Color(0xFFE2E8F0),
+                    start = Offset(0f, 0f),
+                    end = Offset(size.width, 0f),
+                    strokeWidth = 1.dp.toPx()
+                )
+            }
     ) {
         Column(
             modifier = Modifier
@@ -568,21 +584,23 @@ private fun NativeBottomActionSheet(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            Text(
-                text = helperText,
-                fontSize = 11.sp,
-                color = Color(0xFF64748B),
-                modifier = Modifier.align(Alignment.CenterHorizontally)
-            )
+            if (!helperText.isNullOrBlank()) {
+                Text(
+                    text = helperText,
+                    fontSize = 11.sp,
+                    color = Color(0xFF64748B),
+                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                )
+            }
             Button(
-                onClick = onClick,
-                enabled = enabled,
+                onClick = { if (!isLoading) onClick() },
+                enabled = enabled || isLoading,
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF0284C7),
+                    containerColor = if (isLoading) Color(0xFF0369A1) else Color(0xFF0284C7),
                     contentColor = Color.White,
-                    disabledContainerColor = Color(0xFFCBD5E1),
-                    disabledContentColor = Color(0xFF64748B)
+                    disabledContainerColor = Color(0xFFE2E8F0),
+                    disabledContentColor = Color(0xFF94A3B8)
                 ),
                 contentPadding = PaddingValues(vertical = 14.dp),
                 modifier = Modifier
@@ -596,10 +614,10 @@ private fun NativeBottomActionSheet(
                     ) {
                         CircularProgressIndicator(
                             color = Color.White,
-                            strokeWidth = 2.dp,
+                            strokeWidth = 2.2.dp,
                             modifier = Modifier.size(18.dp)
                         )
-                        Text(primaryLabel, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                        Text(primaryLabel, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color.White)
                     }
                 } else {
                     Text(primaryLabel, fontWeight = FontWeight.Bold, fontSize = 15.sp)
@@ -629,11 +647,11 @@ private fun Step1NativeSymptomScreen(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         // Native Mobile Section Greeting
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
                 text = "¿Cómo te sientes hoy?",
                 fontSize = 22.sp,
@@ -641,17 +659,17 @@ private fun Step1NativeSymptomScreen(
                 color = Color(0xFF0F172A)
             )
             Text(
-                text = "Dicta por voz o selecciona un caso rápido para preparar tu consulta.",
+                text = "Dicta por voz o selecciona un ejemplo clínico rápido.",
                 fontSize = 13.sp,
                 color = Color(0xFF475569)
             )
         }
 
-        // Native Horizontal Scrollable Chips for Quick Cases
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        // Native Horizontal Scrollable Pill Chips for Clinical Examples
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(
-                text = "CASOS RÁPIDOS DE PRUEBA",
-                fontSize = 11.sp,
+                text = "EJEMPLOS CLÍNICOS",
+                fontSize = 10.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF64748B)
             )
@@ -659,33 +677,34 @@ private fun Step1NativeSymptomScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 GemmaLocalEngine.demoCases.forEach { demo ->
                     val isSelected = selectedCaseId == demo.id
                     Surface(
-                        shape = RoundedCornerShape(14.dp),
-                        color = if (isSelected) Color(0xFFE0F2FE) else Color.White,
-                        shadowElevation = if (isSelected) 0.dp else 1.dp,
+                        shape = RoundedCornerShape(50),
+                        color = if (isSelected) Color(0xFF0284C7) else Color.White,
+                        shadowElevation = if (isSelected) 2.dp else 0.dp,
                         border = BorderStroke(
                             1.dp,
-                            if (isSelected) Color(0xFF0284C7) else Color(0xFFE2E8F0)
+                            if (isSelected) Color(0xFF0284C7) else Color(0xFFCBD5E1)
                         ),
                         modifier = Modifier
-                            .clip(RoundedCornerShape(14.dp))
+                            .clip(RoundedCornerShape(50))
                             .clickable { onSelectCase(demo) }
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(7.dp)
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(8.dp)
+                                    .size(7.dp)
                                     .clip(CircleShape)
                                     .background(
-                                        when (demo.id) {
+                                        if (isSelected) Color.White
+                                        else when (demo.id) {
                                             "chest" -> Color(0xFFEF4444)
                                             "fever" -> Color(0xFFF59E0B)
                                             else -> Color(0xFF0284C7)
@@ -695,8 +714,8 @@ private fun Step1NativeSymptomScreen(
                             Text(
                                 text = demo.label,
                                 fontSize = 13.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isSelected) Color(0xFF0369A1) else Color(0xFF1E293B)
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (isSelected) Color.White else Color(0xFF1E293B)
                             )
                         }
                     }
@@ -704,69 +723,89 @@ private fun Step1NativeSymptomScreen(
             }
         }
 
-        // Native Symptom Input Card with Embedded Floating Mic Action
+        // Native Symptom Input Card with High-Contrast Transcript Box & Tactile Voice Pill
         Surface(
             shape = RoundedCornerShape(18.dp),
             color = Color.White,
-            shadowElevation = 2.dp,
+            shadowElevation = 1.dp,
+            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
+            Column(modifier = Modifier.padding(14.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "RELATO DE SÍNTOMAS",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF64748B)
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "RELATO DE SÍNTOMAS",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF475569)
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(50),
+                            color = Color(0xFFF1F5F9)
+                        ) {
+                            Text(
+                                text = "Gemma 4 Local",
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF475569),
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
                     if (transcript.isNotBlank()) {
                         Text(
                             text = "Limpiar",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = Color(0xFF64748B),
+                            color = Color(0xFF0284C7),
                             modifier = Modifier.clickable { onTranscriptChange("") }
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xFFF8FAFC),
+                    border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(102.dp)
+                ) {
+                    Box(modifier = Modifier.padding(12.dp)) {
+                        if (transcript.isEmpty()) {
+                            Text(
+                                text = "Toca \"Hablar\" o escribe desde cuándo iniciaron tus síntomas, qué tan intensos son y si has tomado algún medicamento...",
+                                fontSize = 14.sp,
+                                lineHeight = 20.sp,
+                                color = Color(0xFF94A3B8)
+                            )
+                        }
+                        BasicTextField(
+                            value = transcript,
+                            onValueChange = onTranscriptChange,
+                            textStyle = TextStyle(
+                                fontSize = 14.sp,
+                                lineHeight = 20.sp,
+                                color = Color(0xFF0F172A)
+                            ),
+                            modifier = Modifier.fillMaxSize()
                         )
                     }
                 }
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(126.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xFFF8FAFC))
-                        .padding(12.dp)
-                ) {
-                    if (transcript.isEmpty()) {
-                        Text(
-                            text = "Toca el botón de micrófono o escribe desde cuándo iniciaron tus síntomas, qué tan intensos son y si has tomado algún medicamento...",
-                            fontSize = 14.sp,
-                            lineHeight = 20.sp,
-                            color = Color(0xFF94A3B8)
-                        )
-                    }
-                    BasicTextField(
-                        value = transcript,
-                        onValueChange = onTranscriptChange,
-                        textStyle = TextStyle(
-                            fontSize = 14.sp,
-                            lineHeight = 20.sp,
-                            color = Color(0xFF0F172A)
-                        ),
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Native Voice Action Bar inside Card
+                // Tactile Voice Action Bar with Pill CTA
                 Surface(
                     shape = RoundedCornerShape(12.dp),
                     color = Color(0xFFF0F9FF),
@@ -777,7 +816,7 @@ private fun Step1NativeSymptomScreen(
                         .clickable { onStartVoice() }
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
@@ -799,34 +838,45 @@ private fun Step1NativeSymptomScreen(
                                     text = "Dictar síntomas por voz",
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF0369A1)
+                                    color = Color(0xFF0F172A)
                                 )
                                 Text(
-                                    text = "Reconocimiento de voz en español",
+                                    text = "Transcripción clínica en español",
                                     fontSize = 11.sp,
-                                    color = Color(0xFF0284C7)
+                                    color = Color(0xFF0369A1)
                                 )
                             }
                         }
-                        Text(
-                            text = "Hablar",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
+                        Surface(
+                            shape = RoundedCornerShape(50),
                             color = Color(0xFF0284C7)
-                        )
+                        ) {
+                            Text(
+                                text = "Hablar",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                            )
+                        }
                     }
                 }
             }
         }
 
-        // Native 2x2 Grid of Vitals Cards
+        // Clean 2x2 Grid of Vitals Cards (No Nested Box-in-Box, Baseline-Aligned Units + Clinical Status)
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
                 text = "SIGNOS VITALES EN CASA (OPCIONAL)",
-                fontSize = 11.sp,
+                fontSize = 10.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF64748B)
             )
+            val tempAlert = temperatureC.toDoubleOrNull()?.let { it >= 38.0 } == true
+            val spo2Alert = spo2Percent.toIntOrNull()?.let { it in 1..94 } == true
+            val hrAlert = heartRateBpm.toIntOrNull()?.let { it >= 100 } == true
+            val bpAlert = bloodPressure.startsWith("14") || bloodPressure.startsWith("15") || bloodPressure.startsWith("16")
+
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 NativeVitalMetricCard(
                     title = "Temperatura",
@@ -835,6 +885,8 @@ private fun Step1NativeSymptomScreen(
                     value = temperatureC,
                     onValueChange = onTempChange,
                     accentColor = Color(0xFFF59E0B),
+                    statusBadge = if (tempAlert) "Fiebre" else null,
+                    isAlert = tempAlert,
                     modifier = Modifier.weight(1f)
                 )
                 NativeVitalMetricCard(
@@ -844,6 +896,8 @@ private fun Step1NativeSymptomScreen(
                     value = spo2Percent,
                     onValueChange = onSpo2Change,
                     accentColor = Color(0xFF0284C7),
+                    statusBadge = if (spo2Alert) "Vigilar" else null,
+                    isAlert = spo2Alert,
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -855,6 +909,8 @@ private fun Step1NativeSymptomScreen(
                     value = heartRateBpm,
                     onValueChange = onHrChange,
                     accentColor = Color(0xFF10B981),
+                    statusBadge = if (hrAlert) "Elevado" else null,
+                    isAlert = hrAlert,
                     modifier = Modifier.weight(1f)
                 )
                 NativeVitalMetricCard(
@@ -864,6 +920,8 @@ private fun Step1NativeSymptomScreen(
                     value = bloodPressure,
                     onValueChange = onBpChange,
                     accentColor = Color(0xFF6366F1),
+                    statusBadge = if (bpAlert) "Elevada" else null,
+                    isAlert = bpAlert,
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -879,16 +937,21 @@ private fun NativeVitalMetricCard(
     value: String,
     onValueChange: (String) -> Unit,
     accentColor: Color,
+    statusBadge: String?,
+    isAlert: Boolean,
     modifier: Modifier = Modifier
 ) {
     Surface(
-        shape = RoundedCornerShape(16.dp),
-        color = Color.White,
-        shadowElevation = 1.dp,
+        shape = RoundedCornerShape(14.dp),
+        color = if (isAlert) Color(0xFFFFFBEB) else Color.White,
+        border = BorderStroke(
+            width = 1.dp,
+            color = if (isAlert) Color(0xFFFCD34D) else Color(0xFFE2E8F0)
+        ),
         modifier = modifier
     ) {
         Column(
-            modifier = Modifier.padding(14.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Row(
@@ -904,7 +967,7 @@ private fun NativeVitalMetricCard(
                         modifier = Modifier
                             .size(7.dp)
                             .clip(CircleShape)
-                            .background(accentColor)
+                            .background(if (isAlert) Color(0xFFD97706) else accentColor)
                     )
                     Text(
                         text = title,
@@ -913,43 +976,59 @@ private fun NativeVitalMetricCard(
                         color = Color(0xFF475569)
                     )
                 }
-                Text(
-                    text = unit,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF94A3B8)
-                )
-            }
-
-            BasicTextField(
-                value = value,
-                onValueChange = onValueChange,
-                singleLine = true,
-                textStyle = TextStyle(
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF0F172A)
-                ),
-                decorationBox = { innerTextField ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Color(0xFFF8FAFC))
-                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                if (statusBadge != null) {
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        color = Color(0xFFFEF3C7)
                     ) {
-                        if (value.isEmpty()) {
-                            Text(
-                                text = placeholder,
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color(0xFFCBD5E1)
-                            )
-                        }
-                        innerTextField()
+                        Text(
+                            text = statusBadge,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFB45309),
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
                     }
                 }
-            )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                BasicTextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    singleLine = true,
+                    textStyle = TextStyle(
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF0F172A)
+                    ),
+                    modifier = Modifier.weight(1f),
+                    decorationBox = { innerTextField ->
+                        Box {
+                            if (value.isEmpty()) {
+                                Text(
+                                    text = placeholder,
+                                    fontSize = 20.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFFCBD5E1)
+                                )
+                            }
+                            innerTextField()
+                        }
+                    }
+                )
+                Text(
+                    text = unit,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFF64748B),
+                    modifier = Modifier.padding(bottom = 2.dp)
+                )
+            }
         }
     }
 }
@@ -961,24 +1040,31 @@ private fun Step2NativeQuestionsScreen(
     onSelectAnswer: (Int, String) -> Unit,
     onSpeakQuestion: (String) -> Unit
 ) {
+    // Track which question IDs have their custom free-text input expanded
+    val expandedCustomIds = remember { mutableStateMapOf<Int, Boolean>() }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         questions.forEachIndexed { idx, q ->
             val selected = answers[q.id] ?: ""
+            val isCustomValue = selected.isNotBlank() && !q.quickOptions.contains(selected)
+            val showCustomInput = expandedCustomIds[q.id] == true || isCustomValue
+
             Surface(
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(16.dp),
                 color = Color.White,
-                shadowElevation = 2.dp,
+                shadowElevation = 1.dp,
+                border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
-                    modifier = Modifier.padding(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -986,7 +1072,7 @@ private fun Step2NativeQuestionsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Surface(
-                            shape = RoundedCornerShape(6.dp),
+                            shape = RoundedCornerShape(50),
                             color = Color(0xFFF0F9FF)
                         ) {
                             Text(
@@ -994,7 +1080,7 @@ private fun Step2NativeQuestionsScreen(
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF0284C7),
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                             )
                         }
 
@@ -1014,16 +1100,16 @@ private fun Step2NativeQuestionsScreen(
 
                     Text(
                         text = q.question,
-                        fontSize = 16.sp,
-                        lineHeight = 22.sp,
+                        fontSize = 15.sp,
+                        lineHeight = 21.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF0F172A)
                     )
 
-                    // Native Full-Width Radio Option Cards
+                    // Native Full-Width Radio Option Cards (Clean, No Duplicate TextField!)
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         q.quickOptions.forEach { opt ->
-                            val isSelected = selected == opt
+                            val isSelected = selected == opt && !showCustomInput
                             Surface(
                                 shape = RoundedCornerShape(12.dp),
                                 color = if (isSelected) Color(0xFFF0F9FF) else Color(0xFFF8FAFC),
@@ -1034,17 +1120,21 @@ private fun Step2NativeQuestionsScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(12.dp))
-                                    .clickable { onSelectAnswer(q.id, opt) }
+                                    .clickable {
+                                        expandedCustomIds[q.id] = false
+                                        onSelectAnswer(q.id, opt)
+                                    }
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
                                     NativeRadioCircle(selected = isSelected)
                                     Text(
                                         text = opt,
-                                        fontSize = 14.sp,
+                                        fontSize = 13.sp,
+                                        lineHeight = 18.sp,
                                         fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
                                         color = if (isSelected) Color(0xFF0F172A) else Color(0xFF334155),
                                         modifier = Modifier.weight(1f)
@@ -1052,24 +1142,62 @@ private fun Step2NativeQuestionsScreen(
                                 }
                             }
                         }
+
+                        // Compact Toggle Option for Custom Free-Text Response
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (showCustomInput) Color(0xFFF0F9FF) else Color.White,
+                            border = BorderStroke(
+                                width = 1.dp,
+                                color = if (showCustomInput) Color(0xFF0284C7) else Color(0xFFE2E8F0)
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable {
+                                    val nextState = !showCustomInput
+                                    expandedCustomIds[q.id] = nextState
+                                    if (nextState && q.quickOptions.contains(selected)) {
+                                        onSelectAnswer(q.id, "")
+                                    } else if (!nextState && selected.isBlank()) {
+                                        q.quickOptions.firstOrNull()?.let { onSelectAnswer(q.id, it) }
+                                    }
+                                }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                NativeRadioCircle(selected = showCustomInput)
+                                Text(
+                                    text = "Escribir otra respuesta...",
+                                    fontSize = 13.sp,
+                                    fontWeight = if (showCustomInput) FontWeight.SemiBold else FontWeight.Medium,
+                                    color = if (showCustomInput) Color(0xFF0284C7) else Color(0xFF64748B)
+                                )
+                            }
+                        }
                     }
 
-                    OutlinedTextField(
-                        value = selected,
-                        onValueChange = { onSelectAnswer(q.id, it) },
-                        placeholder = {
-                            Text("O escribe otro detalle...", fontSize = 12.sp, color = Color(0xFF94A3B8))
-                        },
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedContainerColor = Color.White,
-                            unfocusedContainerColor = Color(0xFFF8FAFC),
-                            focusedBorderColor = Color(0xFF0284C7),
-                            unfocusedBorderColor = Color(0xFFE2E8F0)
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    if (showCustomInput) {
+                        OutlinedTextField(
+                            value = if (q.quickOptions.contains(selected)) "" else selected,
+                            onValueChange = { onSelectAnswer(q.id, it) },
+                            placeholder = {
+                                Text("Describe tu respuesta con tus palabras...", fontSize = 13.sp, color = Color(0xFF94A3B8))
+                            },
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor = Color.White,
+                                unfocusedContainerColor = Color(0xFFF8FAFC),
+                                focusedBorderColor = Color(0xFF0284C7),
+                                unfocusedBorderColor = Color(0xFFCBD5E1)
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                 }
             }
         }
@@ -1105,9 +1233,51 @@ private fun NativeRadioCircle(selected: Boolean) {
 }
 
 @Composable
+private fun NativeCheckboxSquare(checked: Boolean) {
+    Box(
+        modifier = Modifier
+            .size(20.dp)
+            .clip(RoundedCornerShape(6.dp))
+            .background(if (checked) Color(0xFF10B981) else Color.White)
+            .drawBehind {
+                if (!checked) {
+                    drawRoundRect(
+                        color = Color(0xFFCBD5E1),
+                        cornerRadius = CornerRadius(6.dp.toPx(), 6.dp.toPx()),
+                        style = Stroke(width = 1.5.dp.toPx())
+                    )
+                }
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        if (checked) {
+            Canvas(modifier = Modifier.size(12.dp)) {
+                val path = Path().apply {
+                    moveTo(size.width * 0.18f, size.height * 0.52f)
+                    lineTo(size.width * 0.42f, size.height * 0.76f)
+                    lineTo(size.width * 0.84f, size.height * 0.24f)
+                }
+                drawPath(
+                    path = path,
+                    color = Color.White,
+                    style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun Step3NativeResultsScreen(
     pat: PatientDeliverable,
     doc: DoctorDeliverable,
+    rawSymptomTranscript: String,
+    temperatureC: String,
+    spo2Percent: String,
+    heartRateBpm: String,
+    bloodPressure: String,
+    followUpQuestions: List<FollowUpQuestion>,
+    followUpAnswers: Map<Int, String>,
     activeBottomTab: Int,
     clinicalFramework: String,
     onChangeFramework: (String) -> Unit,
@@ -1118,6 +1288,29 @@ private fun Step3NativeResultsScreen(
     onSharePass: () -> Unit,
     onSpeakSummary: () -> Unit
 ) {
+    val isUrgent = doc.triageLevel == "ROJO"
+    val isRoutine = doc.triageLevel == "VERDE"
+    val bgColor = when {
+        isUrgent -> Color(0xFFFEF2F2)
+        isRoutine -> Color(0xFFECFDF5)
+        else -> Color(0xFFFFFBEB)
+    }
+    val borderColor = when {
+        isUrgent -> Color(0xFFEF4444)
+        isRoutine -> Color(0xFF10B981)
+        else -> Color(0xFFF59E0B)
+    }
+    val textColor = when {
+        isUrgent -> Color(0xFF991B1B)
+        isRoutine -> Color(0xFF065F46)
+        else -> Color(0xFF92400E)
+    }
+    val badgeText = when {
+        isUrgent -> "PRIORIDAD CLÍNICA · ATENCIÓN URGENTE"
+        isRoutine -> "PRIORIDAD CLÍNICA · CONSULTA RUTINARIA"
+        else -> "PRIORIDAD CLÍNICA · CONSULTA PRIORITARIA HOY"
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -1125,84 +1318,98 @@ private fun Step3NativeResultsScreen(
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // High-Prominence Hero Priority Clinical Callout Banner (Always Pinned at Top)
+        // On Tab 0 ("Mi Pase"): Full Hero Clinical Callout Banner
+        // On Tabs 1 & 2 ("Preparación", "Ficha Médica"): Compact 1-Line Priority Strip so content takes center stage
         if (pat.urgencyNotice.isNotBlank()) {
-            val isUrgent = doc.triageLevel == "ROJO"
-            val isRoutine = doc.triageLevel == "VERDE"
-            val bgColor = when {
-                isUrgent -> Color(0xFFFEF2F2)
-                isRoutine -> Color(0xFFECFDF5)
-                else -> Color(0xFFFFFBEB)
-            }
-            val borderColor = when {
-                isUrgent -> Color(0xFFEF4444)
-                isRoutine -> Color(0xFF10B981)
-                else -> Color(0xFFF59E0B)
-            }
-            val textColor = when {
-                isUrgent -> Color(0xFF991B1B)
-                isRoutine -> Color(0xFF065F46)
-                else -> Color(0xFF92400E)
-            }
-            val badgeText = when {
-                isUrgent -> "PRIORIDAD CLÍNICA · ATENCIÓN URGENTE"
-                isRoutine -> "PRIORIDAD CLÍNICA · CONSULTA RUTINARIA"
-                else -> "PRIORIDAD CLÍNICA · CONSULTA PRIORITARIA HOY"
-            }
-
-            Surface(
-                shape = RoundedCornerShape(18.dp),
-                color = bgColor,
-                shadowElevation = 2.dp,
-                border = BorderStroke(1.5.dp, borderColor),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(18.dp))
-                    .drawBehind {
-                        drawRect(
-                            color = borderColor,
-                            topLeft = Offset.Zero,
-                            size = Size(width = 7.dp.toPx(), height = size.height)
-                        )
-                    }
-            ) {
-                Column(
-                    modifier = Modifier.padding(start = 22.dp, top = 16.dp, end = 16.dp, bottom = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+            if (activeBottomTab == 0) {
+                Surface(
+                    shape = RoundedCornerShape(18.dp),
+                    color = bgColor,
+                    shadowElevation = 2.dp,
+                    border = BorderStroke(1.5.dp, borderColor),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(18.dp))
+                        .drawBehind {
+                            drawRect(
+                                color = borderColor,
+                                topLeft = Offset.Zero,
+                                size = Size(width = 7.dp.toPx(), height = size.height)
+                            )
+                        }
                 ) {
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = borderColor
+                    Column(
+                        modifier = Modifier.padding(start = 20.dp, top = 14.dp, end = 16.dp, bottom = 14.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = borderColor
+                        ) {
+                            Text(
+                                text = badgeText,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
                         Text(
-                            text = badgeText,
-                            fontSize = 10.sp,
+                            text = pat.urgencyNotice,
+                            fontSize = 16.sp,
+                            lineHeight = 22.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            color = textColor
                         )
                     }
-                    Text(
-                        text = pat.urgencyNotice,
-                        fontSize = 17.sp,
-                        lineHeight = 23.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = textColor
-                    )
+                }
+            } else {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = bgColor,
+                    border = BorderStroke(1.dp, borderColor),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = borderColor
+                        ) {
+                            Text(
+                                text = "TRIAJE ${doc.triageLevel}",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
+                        }
+                        Text(
+                            text = pat.urgencyNotice,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = textColor,
+                            maxLines = 1
+                        )
+                    }
                 }
             }
         }
 
-        // TAB 0: MI PASE (RESUMEN PARA EL PACIENTE)
+        // TAB 0: MI PASE (STRUCTURED CLINICAL PASS FOR THE PATIENT)
         if (activeBottomTab == 0) {
             Surface(
                 shape = RoundedCornerShape(18.dp),
                 color = Color.White,
-                shadowElevation = 2.dp,
+                shadowElevation = 1.dp,
+                border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
-                    modifier = Modifier.padding(18.dp),
+                    modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     Row(
@@ -1213,12 +1420,12 @@ private fun Step3NativeResultsScreen(
                         Column {
                             Text(
                                 text = "Tu pase de pre-consulta",
-                                fontSize = 18.sp,
+                                fontSize = 17.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF0F172A)
                             )
                             Text(
-                                text = "Resumen listo para mostrar a tu médico",
+                                text = "Resumen estructurado para mostrar a tu médico",
                                 fontSize = 12.sp,
                                 color = Color(0xFF64748B)
                             )
@@ -1226,6 +1433,7 @@ private fun Step3NativeResultsScreen(
                         Surface(
                             shape = CircleShape,
                             color = Color(0xFFF0F9FF),
+                            border = BorderStroke(1.dp, Color(0xFFBAE6FD)),
                             modifier = Modifier
                                 .size(38.dp)
                                 .clip(CircleShape)
@@ -1237,14 +1445,90 @@ private fun Step3NativeResultsScreen(
                         }
                     }
 
-                    HorizontalDivider(color = Color(0xFFF1F5F9))
+                    // 1. Vitals Strip (if recorded)
+                    if (temperatureC.isNotBlank() || spo2Percent.isNotBlank() || heartRateBpm.isNotBlank() || bloodPressure.isNotBlank()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            if (temperatureC.isNotBlank()) {
+                                PassVitalChip("Temp", "$temperatureC °C", Modifier.weight(1f))
+                            }
+                            if (spo2Percent.isNotBlank()) {
+                                PassVitalChip("SpO2", "$spo2Percent%", Modifier.weight(1f))
+                            }
+                            if (heartRateBpm.isNotBlank()) {
+                                PassVitalChip("Pulso", "$heartRateBpm lpm", Modifier.weight(1f))
+                            }
+                            if (bloodPressure.isNotBlank()) {
+                                PassVitalChip("Presión", bloodPressure, Modifier.weight(1f))
+                            }
+                        }
+                    }
 
-                    Text(
-                        text = pat.friendlySummary,
-                        fontSize = 15.sp,
-                        lineHeight = 22.sp,
-                        color = Color(0xFF1E293B)
-                    )
+                    // 2. Main Symptom Narrative
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = "MOTIVO PRINCIPAL",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF64748B)
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = Color(0xFFF8FAFC),
+                            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = rawSymptomTranscript.ifBlank { pat.friendlySummary },
+                                fontSize = 14.sp,
+                                lineHeight = 20.sp,
+                                color = Color(0xFF1E293B),
+                                modifier = Modifier.padding(12.dp)
+                            )
+                        }
+                    }
+
+                    // 3. Structured Follow-Up Answers
+                    if (followUpQuestions.isNotEmpty()) {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(
+                                text = "RESPUESTAS DE SEGUIMIENTO",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF64748B)
+                            )
+                            followUpQuestions.forEach { q ->
+                                val ans = followUpAnswers[q.id]
+                                if (!ans.isNullOrBlank()) {
+                                    Surface(
+                                        shape = RoundedCornerShape(10.dp),
+                                        color = Color(0xFFF8FAFC),
+                                        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                                        ) {
+                                            Text(
+                                                text = q.question,
+                                                fontSize = 11.sp,
+                                                color = Color(0xFF64748B)
+                                            )
+                                            Text(
+                                                text = ans,
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = Color(0xFF0F172A)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
 
                     Button(
                         onClick = onSharePass,
@@ -1270,12 +1554,82 @@ private fun Step3NativeResultsScreen(
             Surface(
                 shape = RoundedCornerShape(18.dp),
                 color = Color.White,
-                shadowElevation = 2.dp,
+                shadowElevation = 1.dp,
+                border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
-                    modifier = Modifier.padding(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Lista de preparación antes de entrar",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF0F172A)
+                        )
+                        val doneCount = pat.prepChecklist.indices.count { checkedPrep[it] == true }
+                        Surface(
+                            shape = RoundedCornerShape(50),
+                            color = Color(0xFFF0FDF4)
+                        ) {
+                            Text(
+                                text = "$doneCount / ${pat.prepChecklist.size}",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF15803D),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
+                    pat.prepChecklist.forEachIndexed { idx, item ->
+                        val isDone = checkedPrep[idx] == true
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (isDone) Color(0xFFF0FDF4) else Color(0xFFF8FAFC),
+                            border = BorderStroke(
+                                1.dp,
+                                if (isDone) Color(0xFF86EFAC) else Color(0xFFE2E8F0)
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { onTogglePrep(idx) }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                NativeCheckboxSquare(checked = isDone)
+                                Text(
+                                    text = item,
+                                    fontSize = 13.sp,
+                                    color = if (isDone) Color(0xFF64748B) else Color(0xFF1E293B),
+                                    textDecoration = if (isDone) TextDecoration.LineThrough else TextDecoration.None,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            Surface(
+                shape = RoundedCornerShape(18.dp),
+                color = Color.White,
+                shadowElevation = 1.dp,
+                border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Text(
                         text = "Preguntas sugeridas para tu médico",
@@ -1321,67 +1675,19 @@ private fun Step3NativeResultsScreen(
                     }
                 }
             }
-
-            Surface(
-                shape = RoundedCornerShape(18.dp),
-                color = Color.White,
-                shadowElevation = 2.dp,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Text(
-                        text = "Lista de preparación antes de entrar",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF0F172A)
-                    )
-                    pat.prepChecklist.forEachIndexed { idx, item ->
-                        val isDone = checkedPrep[idx] == true
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = if (isDone) Color(0xFFF0FDF4) else Color(0xFFF8FAFC),
-                            border = BorderStroke(
-                                1.dp,
-                                if (isDone) Color(0xFF86EFAC) else Color(0xFFE2E8F0)
-                            ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable { onTogglePrep(idx) }
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                NativeRadioCircle(selected = isDone)
-                                Text(
-                                    text = item,
-                                    fontSize = 13.sp,
-                                    color = if (isDone) Color(0xFF64748B) else Color(0xFF1E293B),
-                                    textDecoration = if (isDone) TextDecoration.LineThrough else TextDecoration.None,
-                                    modifier = Modifier.weight(1f)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
         }
 
-        // TAB 2: FICHA MÉDICA (SOAP / ISBAR)
+        // TAB 2: FICHA MÉDICA (SOAP / ISBAR / OPQRST)
         if (activeBottomTab == 2) {
             Surface(
                 shape = RoundedCornerShape(18.dp),
                 color = Color.White,
-                shadowElevation = 2.dp,
+                shadowElevation = 1.dp,
+                border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
-                    modifier = Modifier.padding(18.dp),
+                    modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
                     Row(
@@ -1390,7 +1696,7 @@ private fun Step3NativeResultsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Nota Clínica",
+                            text = "Ficha Clínica",
                             fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFF0F172A)
@@ -1400,9 +1706,9 @@ private fun Step3NativeResultsScreen(
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(Color(0xFFF1F5F9))
                                 .padding(3.dp),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            horizontalArrangement = Arrangement.spacedBy(3.dp)
                         ) {
-                            listOf("SOAP", "ISBAR").forEach { fw ->
+                            listOf("SOAP", "ISBAR", "OPQRST").forEach { fw ->
                                 val active = clinicalFramework == fw
                                 Surface(
                                     shape = RoundedCornerShape(8.dp),
@@ -1417,7 +1723,7 @@ private fun Step3NativeResultsScreen(
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = if (active) Color(0xFF0284C7) else Color(0xFF64748B),
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                                     )
                                 }
                             }
@@ -1443,7 +1749,7 @@ private fun Step3NativeResultsScreen(
                                 )
                                 doc.redFlags.forEach { rf ->
                                     Text(
-                                        text = "- $rf",
+                                        text = "• $rf",
                                         fontSize = 12.sp,
                                         color = Color(0xFF881337)
                                     )
@@ -1452,34 +1758,27 @@ private fun Step3NativeResultsScreen(
                         }
                     }
 
-                    if (clinicalFramework == "SOAP") {
-                        NativeClinicalBlock("S · SUBJETIVO", doc.soap.subjective)
-                        NativeClinicalBlock("O · OBJETIVO", doc.soap.objective)
-                        NativeClinicalBlock("A · EVALUACIÓN", doc.soap.assessment)
-                        NativeClinicalBlock("P · PLAN", doc.soap.plan)
-                    } else {
-                        NativeClinicalBlock("I · IDENTIFICACIÓN", doc.isbar.identification)
-                        NativeClinicalBlock("S · SITUACIÓN", doc.isbar.situation)
-                        NativeClinicalBlock("B · ANTECEDENTES", doc.isbar.background)
-                        NativeClinicalBlock("A · EVALUACIÓN", doc.isbar.assessment)
-                        NativeClinicalBlock("R · RECOMENDACIÓN", doc.isbar.recommendation)
-                    }
-
-                    if (doc.evidenceQuotes.isNotEmpty()) {
-                        HorizontalDivider(color = Color(0xFFF1F5F9))
-                        Text(
-                            text = "CITAS TEXTUALES DEL PACIENTE",
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF94A3B8)
-                        )
-                        doc.evidenceQuotes.forEach { eq ->
-                            Text(
-                                text = "\"${eq.quote}\"",
-                                fontSize = 12.sp,
-                                fontStyle = FontStyle.Italic,
-                                color = Color(0xFF64748B)
-                            )
+                    when (clinicalFramework) {
+                        "SOAP" -> {
+                            NativeClinicalBlock("S · SUBJETIVO", doc.soap.subjective)
+                            NativeClinicalBlock("O · OBJETIVO", doc.soap.objective)
+                            NativeClinicalBlock("A · EVALUACIÓN", doc.soap.assessment)
+                            NativeClinicalBlock("P · PLAN", doc.soap.plan)
+                        }
+                        "OPQRST" -> {
+                            NativeClinicalBlock("O · APARICIÓN (ONSET)", doc.opqrst.onset)
+                            NativeClinicalBlock("P · PROVOCACIÓN / ALIVIO", doc.opqrst.provocation)
+                            NativeClinicalBlock("Q · CALIDAD DEL SÍNTOMA", doc.opqrst.quality)
+                            NativeClinicalBlock("R · IRRADIACIÓN / REGIÓN", doc.opqrst.radiation)
+                            NativeClinicalBlock("S · SEVERIDAD (EVA)", doc.opqrst.severity)
+                            NativeClinicalBlock("T · TIEMPO Y EVOLUCIÓN", doc.opqrst.time)
+                        }
+                        else -> {
+                            NativeClinicalBlock("I · IDENTIFICACIÓN", doc.isbar.identification)
+                            NativeClinicalBlock("S · SITUACIÓN", doc.isbar.situation)
+                            NativeClinicalBlock("B · ANTECEDENTES", doc.isbar.background)
+                            NativeClinicalBlock("A · EVALUACIÓN", doc.isbar.assessment)
+                            NativeClinicalBlock("R · RECOMENDACIÓN", doc.isbar.recommendation)
                         }
                     }
 
@@ -1500,6 +1799,34 @@ private fun Step3NativeResultsScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun PassVitalChip(label: String, value: String, modifier: Modifier = Modifier) {
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = Color(0xFFF0F9FF),
+        border = BorderStroke(1.dp, Color(0xFFBAE6FD)),
+        modifier = modifier
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = label.uppercase(),
+                fontSize = 9.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF0369A1)
+            )
+            Text(
+                text = value,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF0F172A)
+            )
         }
     }
 }

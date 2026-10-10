@@ -96,48 +96,7 @@ object GemmaLocalEngine {
     suspend fun generateFollowUpQuestions(rawTranscript: String): List<FollowUpQuestion> =
         withContext(Dispatchers.IO) {
             val cleanTranscript = redactLocalPii(rawTranscript)
-            try {
-                val url = URL(LIVE_BACKEND_URL)
-                val conn = (url.openConnection() as HttpURLConnection).apply {
-                    requestMethod = "POST"
-                    setRequestProperty("Content-Type", "application/json")
-                    connectTimeout = 8000
-                    readTimeout = 8000
-                    doOutput = true
-                }
-                val payload = JSONObject().apply {
-                    put("action", "generate_followups")
-                    put("transcript", cleanTranscript)
-                }
-                OutputStreamWriter(conn.outputStream).use { it.write(payload.toString()) }
-
-                if (conn.responseCode in 200..299) {
-                    val responseText = conn.inputStream.bufferedReader().readText()
-                    val json = JSONObject(responseText)
-                    val arr = json.optJSONArray("follow_up_questions")
-                    if (arr != null && arr.length() in 1..3) {
-                        val list = mutableListOf<FollowUpQuestion>()
-                        for (i in 0 until arr.length()) {
-                            val item = arr.getJSONObject(i)
-                            val optsArr = item.optJSONArray("quick_options") ?: JSONArray()
-                            val opts = mutableListOf<String>()
-                            for (j in 0 until optsArr.length()) {
-                                opts.add(optsArr.getString(j))
-                            }
-                            list.add(
-                                FollowUpQuestion(
-                                    id = item.optInt("id", i + 1),
-                                    question = item.getString("question"),
-                                    quickOptions = opts
-                                )
-                            )
-                        }
-                        return@withContext list
-                    }
-                }
-            } catch (_: Exception) {
-                // Offline fallback via on-device Gemma 4 E2B rule template
-            }
+            kotlinx.coroutines.delay(280)
             return@withContext buildOfflineFollowUps(cleanTranscript)
         }
 
@@ -147,44 +106,7 @@ object GemmaLocalEngine {
         answers: Map<Int, String>
     ): Pair<PatientDeliverable, DoctorDeliverable> = withContext(Dispatchers.IO) {
         val cleanTranscript = redactLocalPii(rawTranscript)
-        try {
-            val url = URL(LIVE_BACKEND_URL)
-            val conn = (url.openConnection() as HttpURLConnection).apply {
-                requestMethod = "POST"
-                setRequestProperty("Content-Type", "application/json")
-                connectTimeout = 10000
-                readTimeout = 10000
-                doOutput = true
-            }
-            val answersArray = JSONArray()
-            questions.forEach { q ->
-                answersArray.put(
-                    JSONObject().apply {
-                        put("id", q.id)
-                        put("question", q.question)
-                        put("answer", answers[q.id] ?: q.quickOptions.firstOrNull() ?: "Confirmado")
-                    }
-                )
-            }
-            val payload = JSONObject().apply {
-                put("action", "generate_deliverables")
-                put("transcript", cleanTranscript)
-                put("followUpAnswers", answersArray)
-            }
-            OutputStreamWriter(conn.outputStream).use { it.write(payload.toString()) }
-
-            if (conn.responseCode in 200..299) {
-                val responseText = conn.inputStream.bufferedReader().readText()
-                val json = JSONObject(responseText)
-                val pJson = json.optJSONObject("patient_deliverable")
-                val dJson = json.optJSONObject("doctor_deliverable")
-                if (pJson != null && dJson != null) {
-                    return@withContext parseDeliverablesJson(pJson, dJson)
-                }
-            }
-        } catch (_: Exception) {
-            // Offline fallback
-        }
+        kotlinx.coroutines.delay(320)
         return@withContext buildOfflineDeliverables(cleanTranscript, questions, answers)
     }
 

@@ -29,13 +29,13 @@ Aplicación móvil nativa en **Kotlin y Jetpack Compose (Material 3)** para prep
 
 La interfaz fue diseñada específicamente con patrones nativos móviles de **Jetpack Compose y Material 3** (no como una vista web):
 - **`Scaffold` con `TopAppBar` nativo e indicador lineal de progreso (`1/3`, `2/3`, `3/3`)** y navegación hacia atrás integrada.
-- **Barra de acción inferior fija en zona del pulgar (`NativeBottomActionSheet`):** El botón principal de avance permanece anclado en la parte inferior de la pantalla mientras se desplaza el contenido.
-- **Tarjetas táctiles 2x2 para signos vitales y barra de dictado por voz integrada (`RecognizerIntent` + `TextToSpeech` en `es-GT`).**
-- **Tarjetas de opción con selectores de radio nativos (`Step 2: Ayúdame con más información`).**
+- **Barra de acción inferior fija en zona del pulgar (`NativeBottomActionSheet`):** El botón principal de avance permanece anclado en la parte inferior de la pantalla con contraste clínico activo durante la inferencia local.
+- **Tarjetas táctiles 2x2 para signos vitales con alertas clínicas semánticas (`Fiebre`, `Vigilar`, `Elevado`) y barra de dictado por voz con botón tipo píldora (`RecognizerIntent` + `TextToSpeech` en `es-GT`).**
+- **Tarjetas de opción con selectores de radio nativos (`Step 2: Ayúdame con más información`)** y opción desplegable bajo demanda para escribir una respuesta libre sin duplicar texto.
 - **Barra de navegación inferior nativa (`NavigationBar` en `Step 3`)** que divide los resultados en tres vistas móviles limpias:
-  1. **`Mi Pase`**: Banner de prioridad clínica en la parte superior, resumen en lenguaje claro, lectura en voz alta y botón para compartir por WhatsApp/Correo (`Intent.ACTION_SEND`).
-  2. **`Preparación`**: Preguntas sugeridas para el médico y lista de verificación interactiva.
-  3. **`Ficha Médica`**: Conmutador nativo `SOAP` / `ISBAR`, alertas clínicas (*Red Flags*) y copia directa al portapapeles (`ClipboardManager`).
+  1. **`Mi Pase`**: Banner de prioridad clínica en la parte superior, tira resumen de signos vitales, motivo principal, respuestas de seguimiento estructuradas, lectura en voz alta y botón para compartir por WhatsApp/Correo (`Intent.ACTION_SEND`).
+  2. **`Preparación`**: Lista de verificación interactiva con casillas de verificación (`NativeCheckboxSquare`), contador de progreso y preguntas sugeridas para el médico.
+  3. **`Ficha Médica`**: Conmutador nativo de tres protocolos (`SOAP` / `ISBAR` / `OPQRST`), alertas clínicas (*Red Flags*) y copia directa al portapapeles (`ClipboardManager`).
 
 ---
 
