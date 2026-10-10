@@ -51,6 +51,14 @@ La interfaz fue diseñada específicamente con patrones nativos móviles de **Je
 
 ---
 
+## Temas para Artículos Técnicos y de Producto
+
+1. **IA en el dispositivo (`Gemma 4 E2B`) frente a inferencia en la nube (`Gemini 3.8 Flash`) en aplicaciones médicas móviles:** Análisis arquitectónico sobre persistencia de modelos cuantizados (~1.3 GB), aceleración por hardware en GPU/NPU móvil mediante LiteRT/MediaPipe y las razones técnicas por las que la inferencia local funciona de forma óptima en una app nativa Android pero resulta inviable dentro de un navegador web móvil.
+2. **De formulario web a experiencia móvil nativa en Jetpack Compose (Material 3) para pacientes con síntomas agudos:** Decisiones de diseño e ingeniería de interfaz móvil orientadas a reducir la carga cognitiva del paciente: stepper interactivo de una sola pregunta a la vez sin necesidad de hacer scroll, barra de acción en la zona del pulgar y tarjetas de signos vitales con alertas semánticas en tiempo real.
+3. **Arquitectura híbrida offline-first para triaje clínico en brigadas rurales y zonas de baja conectividad:** Cómo estructurar un cliente móvil capaz de ejecutar anonimización de PII, interrogatorio OPQRST, detección de banderas rojas y generación de fichas `SOAP` / `ISBAR` completamente fuera de línea y sincronizar cuando vuelve la cobertura.
+
+---
+
 ## Compilación y Ejecución en Emulador
 
 ```bash
