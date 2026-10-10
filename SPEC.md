@@ -1,7 +1,7 @@
 # Especificación Técnica: PreConsulta (Android Nativo)
 
 ## 1. Objetivo
-Proveer una experiencia móvil nativa en Android (Kotlin + Jetpack Compose) minimalista, luminosa (100% Light Mode) y sin distracciones para que un paciente registre sus síntomas por voz en menos de 90 segundos, responda de **1 a 3 preguntas breves de seguimiento ("Ayúdame con más información")** según qué datos falten en su relato y obtenga su **Pase de Pre-Consulta** encabezado por un banner de prioridad clínica de alta visibilidad junto con la **Ficha Clínica (SOAP / ISBAR)** para su médico.
+Proveer una experiencia móvil nativa en Android (Kotlin + Jetpack Compose) minimalista, luminosa y sin distracciones para que un paciente registre sus síntomas por voz en menos de 90 segundos, responda de **1 a 3 preguntas breves de seguimiento ("Ayúdame con más información")** según qué datos falten en su relato y obtenga su **Pase de Pre-Consulta** encabezado por un banner de prioridad clínica de alta visibilidad junto con la **Ficha Clínica (SOAP / ISBAR)** para su médico.
 
 ## 2. Principios de Diseño UI/UX
 - **Minimalismo Clínico (Light Mode Puro):** Fondo `#F8FAFC`, tarjetas blancas `#FFFFFF`, acento primario `#0284C7`, cero modo oscuro y cero emojis.

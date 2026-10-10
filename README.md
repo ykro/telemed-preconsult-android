@@ -1,13 +1,13 @@
 # PreConsulta — Cliente Android Nativo (`telemed-preconsult-android`)
 
-Cliente móvil nativo en **Kotlin + Jetpack Compose (100% Light Mode)** para captura rápida de síntomas por voz, seguimiento dinámico de **1 a 3 preguntas breves ("Ayúdame con más información")** y generación del **Pase de Pre-Consulta del Paciente** (con banner hero de prioridad clínica) y la **Ficha Clínica (SOAP / ISBAR)**, diseñado para operar tanto conectado como en modo offline con **Gemma 4 E2B**.
+Cliente móvil nativo en **Kotlin + Jetpack Compose** para captura rápida de síntomas por voz, seguimiento dinámico de **1 a 3 preguntas breves ("Ayúdame con más información")** y generación del **Pase de Pre-Consulta del Paciente** (con banner hero de prioridad clínica) y la **Ficha Clínica (SOAP / ISBAR)**, diseñado para operar tanto conectado como en modo offline con **Gemma 4 E2B**.
 
 - **Aplicación Web Compañera (Deploy en Producción):** [https://telemed-preconsult-ai.vercel.app](https://telemed-preconsult-ai.vercel.app)
 - **Repositorio Web Compañero:** [`ykro/telemed-preconsult-ai`](https://github.com/ykro/telemed-preconsult-ai)
 - **Especificación Técnica:** [Ver SPEC.md](./SPEC.md)
 - **Arquitectura del Cliente Android:** [Ver docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)
 - **Guía de Onboarding e Instalación Android:** [Ver docs/ONBOARDING.md](./docs/ONBOARDING.md)
-- **Índice General de Proyectos:** [`ykro/hackathon-prototipos-index`](https://github.com/ykro/hackathon-prototipos-index)
+- **Índice General de Proyectos:** [`ykro/ilab-aibuilders-prototypes`](https://github.com/ykro/ilab-aibuilders-prototypes)
 
 ---
 
